@@ -20,13 +20,4 @@ This example can be run with `tsc-watch` to watch the files and automatically re
 npm run watch:start
 ```
 
-### Production
-
-You can also run the bot with `npm dev`, this will first build your code and then run `node ./dist/index.js`. But this is not the recommended way to run a bot in production.
-
-## License
-
-Dedicated to the public domain via the [Unlicense], courtesy of the Sapphire Community and its contributors.
-
-[sapphire]: https://github.com/sapphiredev/framework
-[unlicense]: https://github.com/sapphiredev/examples/blob/main/LICENSE.md
+This project follows the DyingStar development model. For more information, please refer to the [development guide](https://github.com/DyingStar-game/website/blob/main/README.md).

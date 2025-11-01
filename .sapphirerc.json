@@ -1,11 +1,10 @@
 {
-	"$schema": "https://raw.githubusercontent.com/sapphiredev/cli/main/templates/schemas/.sapphirerc.scheme.json",
 	"projectLanguage": "ts",
 	"locations": {
 		"base": "src",
 		"arguments": "arguments",
-		"commands": "commands",
-		"listeners": "listeners",
+		"commands": "services",
+		"listeners": "services",
 		"preconditions": "preconditions",
 		"interaction-handlers": "interaction-handlers",
 		"routes": "routes"
