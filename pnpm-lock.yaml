@@ -54,7 +54,7 @@ importers:
         specifier: ^2.0.20
         version: 2.0.20
       discord.js:
-        specifier: ^14.17.3
+        specifier: 14.x
         version: 14.24.2
     devDependencies:
       '@sapphire/cli':

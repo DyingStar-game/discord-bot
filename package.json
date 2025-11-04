@@ -21,7 +21,7 @@
 		"@sapphire/utilities": "^3.18.1",
 		"@skyra/env-utilities": "^1.3.0",
 		"colorette": "^2.0.20",
-		"discord.js": "^14.17.3"
+		"discord.js": "14.x"
 	},
 	"devDependencies": {
 		"@sapphire/cli": "^1.9.3",
