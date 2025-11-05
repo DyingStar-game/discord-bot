@@ -1,4 +1,4 @@
 {
 	"conventionalCommits.gitmoji": false,
-	"conventionalCommits.scopes": ["Setup"]
+	"conventionalCommits.scopes": ["Setup", "Module - BroadCast"]
 }

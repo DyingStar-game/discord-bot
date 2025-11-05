@@ -1,44 +1,32 @@
 import { ApplyOptions } from '@sapphire/decorators';
-import { Command, container } from '@sapphire/framework';
+import { Command } from '@sapphire/framework';
 import { Subcommand } from '@sapphire/plugin-subcommands';
 import { ApplicationIntegrationType, ChannelType, InteractionContextType } from 'discord.js';
+import { sendBroadcast } from './sendBroadcast';
 
 @ApplyOptions<Subcommand.Options>({
 	name: 'broadcast',
 	description: 'Broadcast a message to the server from bot account',
-	runIn: ['GUILD_TEXT'],
-	aliases: ['broadcast', 'br'],
+	aliases: ['br'],
 	typing: true,
 	subcommands: [
 		{
 			name: 'send',
 			chatInputRun: async (interaction: Command.ChatInputCommandInteraction) => {
-				return await broadcast(interaction);
+				return await sendBroadcast(interaction);
 			}
 		},
 		{
-			name: 'send2',
-			chatInputRun: async (interaction: Command.ChatInputCommandInteraction) => {
-				return await broadcast(interaction);
-			}
+			name: 'get'
+			// chatInputRun: async (interaction: Command.ChatInputCommandInteraction) => {
+			// 	return await broadcast(interaction);
+			// }
 		},
 		{
-			name: 'action',
-			type: 'group',
-			entries: [
-				{
-					name: 'senvd',
-					chatInputRun: async (interaction: Command.ChatInputCommandInteraction) => {
-						return await broadcast(interaction);
-					}
-				},
-				{
-					name: 'senvd2',
-					chatInputRun: async (interaction: Command.ChatInputCommandInteraction) => {
-						return await broadcast(interaction);
-					}
-				}
-			]
+			name: 'update'
+			// chatInputRun: async (interaction: Command.ChatInputCommandInteraction) => {
+			// 	return await broadcast(interaction);
+			// }
 		}
 	]
 })
@@ -60,35 +48,22 @@ export class BroadcastCommand extends Subcommand {
 				.addSubcommand((subcommand) =>
 					subcommand
 						.setName('send')
-						.setDescription('Send a message to the server')
-						.addStringOption((option) => option.setName('message-id').setDescription('The message ID to send').setRequired(true))
+						.setDescription('Broadcast a message to the server with bot account')
+						.addStringOption((option) => option.setName('link').setDescription('Link to the message to broadcast').setRequired(true))
 						.addChannelOption((option) =>
 							option
 								.setName('channel')
-								.setDescription('The channel to send the message to')
+								.setDescription('Channel to broadcast the message to')
 								.setRequired(true)
-								.addChannelTypes([ChannelType.GuildText, ChannelType.GuildAnnouncement])
+								.addChannelTypes([
+									ChannelType.GuildText,
+									ChannelType.GuildAnnouncement,
+									ChannelType.AnnouncementThread,
+									ChannelType.PublicThread,
+									ChannelType.PrivateThread,
+									ChannelType.GuildForum
+								])
 						)
-				)
-				.addSubcommand((subcommand) =>
-					subcommand
-						.setName('send2')
-						.setDescription('Send a message to the server')
-						.addStringOption((option) => option.setName('message-id').setDescription('The message ID to send').setRequired(true))
-						.addChannelOption((option) =>
-							option
-								.setName('channel')
-								.setDescription('The channel to send the message to')
-								.setRequired(true)
-								.addChannelTypes([ChannelType.GuildText, ChannelType.GuildAnnouncement])
-						)
-				)
-				.addSubcommandGroup((group) =>
-					group
-						.setName('action')
-						.setDescription('Action to perform')
-						.addSubcommand((subcommand) => subcommand.setName('senvd').setDescription('Send a message to the server'))
-						.addSubcommand((subcommand) => subcommand.setName('senvd2').setDescription('Send a message to the server'))
 				)
 		);
 
@@ -104,13 +79,3 @@ export class BroadcastCommand extends Subcommand {
 	// 	return await broadcast(interaction);
 	// }
 }
-
-const broadcast = async (interaction: Command.ContextMenuCommandInteraction | Command.ChatInputCommandInteraction) => {
-	const msg = await interaction.reply({ content: 'Ping?', fetchReply: true });
-
-	const content = `Broadcasted! Bot Latency ${Math.round(container.client.ws.ping)}ms. API Latency ${
-		msg.createdTimestamp - interaction.createdTimestamp
-	}ms.`;
-
-	return interaction.editReply({ content });
-};
