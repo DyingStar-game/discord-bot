@@ -26,17 +26,17 @@ export const sendLongMessageAsync = async (
 	const contentChunks = content ? splitIntoChunks(content) : [];
 
 	if (contentChunks.length > 0) {
-		await channel.send({
-			content: contentChunks[0],
-			embeds,
-			files
-		});
-
-		for (let i = 1; i < contentChunks.length; i++) {
+		for (let i = 0; i < contentChunks.length - 1; i++) {
 			await channel.send({
 				content: contentChunks[i]
 			});
 		}
+
+		await channel.send({
+			content: contentChunks[contentChunks.length - 1],
+			embeds,
+			files
+		});
 		return true;
 	} else {
 		await channel.send({
@@ -45,89 +45,6 @@ export const sendLongMessageAsync = async (
 		});
 		return true;
 	}
-};
-
-/**
- * Check if a member can send messages in a channel
- * @param channel - The channel to check the permissions of
- * @param member - The member to check the permissions of
- * @returns [true, undefined] if the member can send messages in the channel, [false, permissionNames] if the member cannot send messages in the channel
- */
-export const canSendMessagesInChannel = async (channel: TextChannel | VoiceChannel | NewsChannel | ThreadChannel, member: GuildMemberResolvable) => {
-	const memberPermissions = channel.permissionsFor(member);
-	if (!memberPermissions) {
-		throw new Error('Impossible de vérifier les permissions du membre dans le canal');
-	}
-
-	const requiredPermissions = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages];
-
-	if (requiredPermissions.every((perm) => memberPermissions.has(perm))) return [true, undefined];
-
-	const missingPermissions = requiredPermissions.filter((perm) => !memberPermissions.has(perm));
-
-	const permissionNames = missingPermissions
-		.map((perm) => {
-			return Object.keys(PermissionFlagsBits).find((key) => PermissionFlagsBits[key as keyof typeof PermissionFlagsBits] === perm);
-		})
-		.join(', ');
-
-	return [false, permissionNames];
-};
-
-/**
- * Check if a member can send attachments in a channel
- * @param channel - The channel to check the permissions of
- * @param member - The member to check the permissions of
- * @returns [true, undefined] if the member can send attachments in the channel, [false, permissionNames] if the member cannot send attachments in the channel
- */
-export const canSendAttachmentsInChannel = async (
-	channel: TextChannel | VoiceChannel | NewsChannel | ThreadChannel,
-	member: GuildMemberResolvable
-) => {
-	const memberPermissions = channel.permissionsFor(member);
-	if (!memberPermissions) {
-		throw new Error('Impossible de vérifier les permissions du membre dans le canal');
-	}
-
-	const requiredPermissions = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles];
-
-	if (requiredPermissions.every((perm) => memberPermissions.has(perm))) return [true, undefined];
-
-	const missingPermissions = requiredPermissions.filter((perm) => !memberPermissions.has(perm));
-
-	const permissionNames = missingPermissions
-		.map((perm) => {
-			return Object.keys(PermissionFlagsBits).find((key) => PermissionFlagsBits[key as keyof typeof PermissionFlagsBits] === perm);
-		})
-		.join(', ');
-
-	return [false, permissionNames];
-};
-
-/**
- * Check if a member can send embeds in a channel
- * @param channel - The channel to check the permissions of
- * @param member - The member to check the permissions of
- * @returns [true, undefined] if the member can send embeds in the channel, [false, permissionNames] if the member cannot send embeds in the channel
- */
-export const canSendEmbedsInChannel = async (channel: TextChannel | VoiceChannel | NewsChannel | ThreadChannel, member: GuildMemberResolvable) => {
-	const memberPermissions = channel.permissionsFor(member);
-	if (!memberPermissions) {
-		throw new Error('Impossible de vérifier les permissions du membre dans le canal');
-	}
-
-	const requiredPermissions = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks];
-
-	if (requiredPermissions.every((perm) => memberPermissions.has(perm))) return [true, undefined];
-
-	const missingPermissions = requiredPermissions.filter((perm) => !memberPermissions.has(perm));
-
-	const permissionNames = missingPermissions
-		.map((perm) => {
-			return Object.keys(PermissionFlagsBits).find((key) => PermissionFlagsBits[key as keyof typeof PermissionFlagsBits] === perm);
-		})
-		.join(', ');
-	return [false, permissionNames];
 };
 
 /**

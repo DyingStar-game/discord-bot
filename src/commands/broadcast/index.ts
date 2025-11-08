@@ -3,16 +3,19 @@ import { isTextBasedChannel } from '@sapphire/discord.js-utilities';
 import { Command } from '@sapphire/framework';
 import { Subcommand } from '@sapphire/plugin-subcommands';
 import {
+	ActionRowBuilder,
+	ApplicationCommandType,
 	ApplicationIntegrationType,
+	ButtonBuilder,
+	ButtonStyle,
 	ChannelType,
 	ChatInputCommandInteraction,
 	ContextMenuCommandInteraction,
 	GuildMember,
-	InteractionContextType,
-	PermissionFlagsBits
+	InteractionContextType
 } from 'discord.js';
 import '../../utils/channelMethods';
-import { hasRequiredPermissionsInChannel, sendLongMessageAsync } from '../../utils/channelMethods';
+import { sendLongMessageAsync } from '../../utils/channelMethods';
 import { isBotMessage, isMessageOwner } from '../../utils/messageMethods';
 import '../../utils/stringMethods';
 
@@ -77,17 +80,21 @@ export class BroadcastCommand extends Subcommand {
 				)
 		);
 
-		// registry.registerContextMenuCommand({
-		// 	name: this.name,
-		// 	type: ApplicationCommandType.Message,
-		// 	integrationTypes,
-		// 	contexts
-		// });
+		registry.registerContextMenuCommand({
+			name: this.name,
+			type: ApplicationCommandType.Message,
+			integrationTypes,
+			contexts
+		});
 	}
 
-	// public override async contextMenuRun(interaction: Command.ContextMenuCommandInteraction) {
-	// 	return await broadcast(interaction);
-	// }
+	public override async contextMenuRun(interaction: ContextMenuCommandInteraction) {
+		const btSend = new ButtonBuilder().setCustomId('broadcast-send').setLabel('Send').setStyle(ButtonStyle.Primary);
+		const row = new ActionRowBuilder<ButtonBuilder>().addComponents(btSend);
+
+		return interaction.reply({ content: 'Choice the action to perform', components: [row], ephemeral: true });
+		// return await this.sendBroadcast(interaction);
+	}
 
 	public sendBroadcast = async (interaction: ChatInputCommandInteraction | ContextMenuCommandInteraction) => {
 		await interaction.deferReply({ ephemeral: true });
@@ -139,20 +146,6 @@ export class BroadcastCommand extends Subcommand {
 			return interaction.editReply({ content: '❌ Channel de destination introuvable ou inaccessible' });
 		}
 
-		const requiredPermissions = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages];
-		if (message.embeds.length > 0) requiredPermissions.push(PermissionFlagsBits.EmbedLinks);
-		if (message.attachments.size > 0) requiredPermissions.push(PermissionFlagsBits.AttachFiles);
-
-		const [canSendMessages, canSendMessagesPermissionNames] = await hasRequiredPermissionsInChannel(
-			broadcastChannel,
-			interactionMember,
-			requiredPermissions
-		);
-		if (!canSendMessages)
-			return interaction.editReply({
-				content: `❌ Vous n'avez pas les permissions nécessaires sur ce channel.\nPermissions manquantes: ${canSendMessagesPermissionNames}`
-			});
-
 		try {
 			await sendLongMessageAsync(broadcastChannel, {
 				content: message.content,
@@ -161,7 +154,7 @@ export class BroadcastCommand extends Subcommand {
 			});
 			return interaction.editReply({ content: '✅ Message broadcasté avec succès!' });
 		} catch (error) {
-			console.error('Erreur lors du broadcast:', error);
+			this.container.logger.error('Erreur lors du broadcast:', error);
 			return interaction.editReply({
 				content: "❌ Erreur lors de l'envoi du message. Vérifiez les permissions du bot."
 			});

@@ -10,7 +10,6 @@ export class Roles {
 
 	// Moderation
 	static readonly MODERATION = '1432499495882457227';
-	static readonly TEMP = '1432499495882457226';
 
 	// Leadership
 	static readonly SUPERVISOR = '1432499495522013354';
@@ -75,10 +74,10 @@ export class Roles {
 	 */
 	static readonly Groups = {
 		// Administration and moderation roles
-		STAFF: [Roles.MODERATION, Roles.TEMP],
+		STAFF: [Roles.MODERATION],
 
 		// Leadership roles
-		LEADERSHIP: [Roles.LEAD, Roles.SUB_LEAD, Roles.SUPERVISOR],
+		LEADERSHIP: [Roles.SUPERVISOR, Roles.LEAD, Roles.SUB_LEAD],
 
 		// All web development roles
 		WEB_DEV: [Roles.WEB, Roles.W_SITE, Roles.W_DISCORD, Roles.W_LAUNCHER],
