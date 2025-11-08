@@ -1,12 +1,10 @@
-declare global {
-	interface String {
-		splitIntoChunks(maxLength?: number): string[];
-	}
-}
-
-function splitIntoChunks(this: string, maxLength: number = 2000): string[] {
-	const text = this ?? '';
-
+/**
+ * Split a text into chunks of a given maximum length
+ * @param text - The text to split into chunks
+ * @param maxLength - The maximum length of each chunk
+ * @returns An array of strings, each representing a chunk of the original text
+ */
+export const splitIntoChunks = (text: string = '', maxLength: number = 2000): string[] => {
 	if (text.length <= maxLength) {
 		return [text];
 	}
@@ -58,14 +56,4 @@ function splitIntoChunks(this: string, maxLength: number = 2000): string[] {
 	}
 
 	return chunks;
-}
-
-if (typeof (String.prototype as any).splitIntoChunks !== 'function') {
-	Object.defineProperty(String.prototype, 'splitIntoChunks', {
-		value: splitIntoChunks,
-		writable: false,
-		configurable: true
-	});
-}
-
-export {};
+};
