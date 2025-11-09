@@ -3,6 +3,8 @@ node_modules/
 .vs/
 .idea/
 *.iml
+.pnpm-store/
+.cache/
 
 # Yarn files
 .yarn/install-state.gz
