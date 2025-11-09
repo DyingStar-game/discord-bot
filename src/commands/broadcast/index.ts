@@ -1,23 +1,10 @@
 import { ApplyOptions } from '@sapphire/decorators';
-import { isTextBasedChannel } from '@sapphire/discord.js-utilities';
 import { Command } from '@sapphire/framework';
 import { Subcommand } from '@sapphire/plugin-subcommands';
-import {
-	ActionRowBuilder,
-	ApplicationCommandType,
-	ApplicationIntegrationType,
-	ButtonBuilder,
-	ButtonStyle,
-	ChannelType,
-	ChatInputCommandInteraction,
-	ContextMenuCommandInteraction,
-	GuildMember,
-	InteractionContextType
-} from 'discord.js';
-import '../../utils/channelMethods';
-import { sendLongMessageAsync } from '../../utils/channelMethods';
-import { isBotMessage, isMessageOwner } from '../../utils/messageMethods';
-import '../../utils/stringMethods';
+import { ApplicationCommandType, ApplicationIntegrationType, ContextMenuCommandInteraction, InteractionContextType, MessageFlags } from 'discord.js';
+import { broadcastContainerBuilder, sendBroadcast, sendSelectChannelTypes } from '../../Services/broadcast.service';
+import '../../utils/methods/channelMethods';
+import '../../utils/methods/stringMethods';
 
 @ApplyOptions<Subcommand.Options>({
 	name: 'broadcast',
@@ -28,7 +15,7 @@ import '../../utils/stringMethods';
 	subcommands: [
 		{
 			name: 'send',
-			chatInputRun: 'sendBroadcast'
+			chatInputRun: sendBroadcast
 		},
 		{
 			name: 'get'
@@ -69,13 +56,7 @@ export class BroadcastCommand extends Subcommand {
 								.setName('channel')
 								.setDescription('Channel to broadcast the message to')
 								.setRequired(true)
-								.addChannelTypes([
-									ChannelType.GuildText,
-									ChannelType.GuildAnnouncement,
-									ChannelType.AnnouncementThread,
-									ChannelType.PublicThread,
-									ChannelType.PrivateThread
-								])
+								.addChannelTypes(sendSelectChannelTypes)
 						)
 				)
 		);
@@ -89,75 +70,13 @@ export class BroadcastCommand extends Subcommand {
 	}
 
 	public override async contextMenuRun(interaction: ContextMenuCommandInteraction) {
-		const btSend = new ButtonBuilder().setCustomId('broadcast-send').setLabel('Send').setStyle(ButtonStyle.Primary);
-		const row = new ActionRowBuilder<ButtonBuilder>().addComponents(btSend);
+		await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
-		return interaction.reply({ content: 'Choice the action to perform', components: [row], ephemeral: true });
-		// return await this.sendBroadcast(interaction);
+		const broadcastContainer = broadcastContainerBuilder(interaction.channelId, interaction.targetId);
+
+		return interaction.editReply({
+			components: [broadcastContainer],
+			flags: [MessageFlags.IsComponentsV2]
+		});
 	}
-
-	public sendBroadcast = async (interaction: ChatInputCommandInteraction | ContextMenuCommandInteraction) => {
-		await interaction.deferReply({ ephemeral: true });
-
-		const interactionMember =
-			interaction.member instanceof GuildMember ? interaction.member : await interaction.guild?.members.fetch(interaction.user.id);
-		if (!interactionMember) {
-			return interaction.editReply({
-				content: '❌ Member not found'
-			});
-		}
-
-		const link = interaction.isChatInputCommand() ? interaction.options.getString('link', true) : '';
-		// Parse Discord link: https://discord.com/channels/{guildId}/{channelId}/{messageId}
-		const urlRegex = /^https?:\/\/(?:ptb\.|canary\.)?discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
-		const match = link.match(urlRegex);
-
-		if (!match) {
-			return interaction.editReply({
-				content: '❌ Lien invalide. Format attendu: https://discord.com/channels/{guildId}/{channelId}/{messageId}'
-			});
-		}
-
-		const [_, _guildId, channelId, messageId] = match;
-
-		// Fetch source channel
-		const channel = await interaction.client.channels.fetch(channelId);
-		if (!channel || !channel.isTextBased()) {
-			return interaction.editReply({ content: '❌ Channel introuvable ou inaccessible ' });
-		}
-
-		// Fetch source message
-		const message = await channel.messages.fetch(messageId);
-		if (!message) {
-			return interaction.editReply({ content: '❌ Message introuvable' });
-		}
-
-		if (isBotMessage(message)) {
-			return interaction.editReply({ content: '❌ Vous ne pouvez pas broadcast un message du bot' });
-		}
-
-		if (!isMessageOwner(message, interactionMember))
-			return interaction.editReply({ content: "❌ Vous ne pouvez pas broadcast un message qui n'est pas votre" });
-
-		// Get target channel
-		const broadcastChannel = interaction.isChatInputCommand() ? interaction.options.getChannel('channel', true) : interaction.channel;
-
-		if (!broadcastChannel || !('send' in broadcastChannel) || !('permissionsFor' in broadcastChannel) || !isTextBasedChannel(broadcastChannel)) {
-			return interaction.editReply({ content: '❌ Channel de destination introuvable ou inaccessible' });
-		}
-
-		try {
-			await sendLongMessageAsync(broadcastChannel, {
-				content: message.content,
-				embeds: message.embeds,
-				files: message.attachments.map((att) => att.url)
-			});
-			return interaction.editReply({ content: '✅ Message broadcasté avec succès!' });
-		} catch (error) {
-			this.container.logger.error('Erreur lors du broadcast:', error);
-			return interaction.editReply({
-				content: "❌ Erreur lors de l'envoi du message. Vérifiez les permissions du bot."
-			});
-		}
-	};
 }

@@ -1,6 +1,6 @@
 import { Precondition } from '@sapphire/framework';
 import type { CommandInteraction, ContextMenuCommandInteraction, Message } from 'discord.js';
-import { Roles } from '../config/Roles';
+import { Roles } from '../utils/roles';
 
 export class StaffOnlyPrecondition extends Precondition {
 	private readonly requiredRoles = [...Roles.Groups.STAFF, Roles.ADMIN, Roles.SUPERVISOR];
