@@ -1,12 +1,14 @@
 import './lib/setup';
 
-import { LogLevel, SapphireClient } from '@sapphire/framework';
+import { container, LogLevel, SapphireClient } from '@sapphire/framework';
 import { GatewayIntentBits, Partials } from 'discord.js';
+import { ErrorHandler } from './lib/structures/ErrorHandler';
 
 const client = new SapphireClient({
 	logger: {
 		level: LogLevel.Debug
 	},
+	loadDefaultErrorListeners: false,
 	shards: 'auto',
 	intents: [
 		GatewayIntentBits.DirectMessageReactions,
@@ -22,6 +24,9 @@ const client = new SapphireClient({
 	],
 	partials: [Partials.Channel]
 });
+
+container.errorHandler = new ErrorHandler(client);
+client.errorHandler = container.errorHandler;
 
 const main = async () => {
 	try {
