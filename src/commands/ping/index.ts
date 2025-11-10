@@ -1,6 +1,6 @@
 import { ApplyOptions } from '@sapphire/decorators';
 import { Command, UserError } from '@sapphire/framework';
-import { ApplicationCommandType, ApplicationIntegrationType, InteractionContextType } from 'discord.js';
+import { ApplicationIntegrationType, InteractionContextType, MessageFlags } from 'discord.js';
 
 @ApplyOptions<Command.Options>({
 	name: 'ping',
@@ -23,34 +23,26 @@ export class PingCommand extends Command {
 			contexts
 		});
 
-		registry.registerContextMenuCommand({
-			name: this.name,
-			type: ApplicationCommandType.Message,
-			integrationTypes,
-			contexts
-		});
+		// registry.registerContextMenuCommand({
+		// 	name: this.name,
+		// 	type: ApplicationCommandType.Message,
+		// 	integrationTypes,
+		// 	contexts
+		// });
 
-		registry.registerContextMenuCommand({
-			name: this.name,
-			type: ApplicationCommandType.User,
-			integrationTypes,
-			contexts
-		});
+		// registry.registerContextMenuCommand({
+		// 	name: this.name,
+		// 	type: ApplicationCommandType.User,
+		// 	integrationTypes,
+		// 	contexts
+		// });
 	}
 
 	public override async chatInputRun(interaction: Command.ChatInputCommandInteraction) {
-		const msg = await interaction.reply({ content: 'Ping?' });
+		await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+		throw new UserError({ identifier: 'ping_error', message: 'Ping error', context: { silent: true, interaction, command: this } });
 
-		const content = `Pong! Bot Latency ${Math.round(this.container.client.ws.ping)}ms. API Latency ${
-			msg.createdTimestamp - interaction.createdTimestamp
-		}ms.`;
-
-		return interaction.editReply({ content });
-	}
-
-	public override async contextMenuRun(interaction: Command.ContextMenuCommandInteraction) {
-		this;
-		throw new UserError({ identifier: 'ping_error', message: 'Ping error', context: { silent: true, interaction } });
+		// return this.container.client.emit(Events.ChatInputCommandError, new Error('Ping error'), { interaction, duration: 0, command: this });
 
 		// const msg = await interaction.reply({ content: 'Ping?' });
 
@@ -59,5 +51,17 @@ export class PingCommand extends Command {
 		// }ms.`;
 
 		// return interaction.editReply({ content });
+	}
+
+	public override async contextMenuRun(interaction: Command.ContextMenuCommandInteraction) {
+		this;
+
+		const msg = await interaction.reply({ content: 'Ping?' });
+
+		const content = `Pong! Bot Latency ${Math.round(this.container.client.ws.ping)}ms. API Latency ${
+			msg.createdTimestamp - interaction.createdTimestamp
+		}ms.`;
+
+		return interaction.editReply({ content });
 	}
 }
