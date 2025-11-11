@@ -27,6 +27,7 @@ const client = new SapphireClient({
 
 container.errorHandler = new ErrorHandler(client);
 client.errorHandler = container.errorHandler;
+client.errorHandler.registerProcessListeners();
 
 const main = async () => {
 	try {
