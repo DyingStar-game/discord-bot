@@ -2,7 +2,7 @@ import { ApplyOptions } from '@sapphire/decorators';
 import { Command } from '@sapphire/framework';
 import { Subcommand } from '@sapphire/plugin-subcommands';
 import { ApplicationCommandType, ApplicationIntegrationType, ContextMenuCommandInteraction, InteractionContextType, MessageFlags } from 'discord.js';
-import { broadcastContainerBuilder, sendBroadcast, sendSelectChannelTypes } from '../../Services/broadcast.service';
+import { broadcastContainerBuilder, getRawBroadcast, sendBroadcast, sendSelectChannelTypes } from '../../Services/broadcast.service';
 import '../../utils/methods/channelMethods';
 import '../../utils/methods/stringMethods';
 
@@ -18,10 +18,8 @@ import '../../utils/methods/stringMethods';
 			chatInputRun: sendBroadcast
 		},
 		{
-			name: 'get'
-			// chatInputRun: async (interaction: Command.ChatInputCommandInteraction) => {
-			// 	return await broadcast(interaction);
-			// }
+			name: 'getraw',
+			chatInputRun: getRawBroadcast
 		},
 		{
 			name: 'update'
@@ -58,6 +56,12 @@ export class BroadcastCommand extends Subcommand {
 								.setRequired(true)
 								.addChannelTypes(sendSelectChannelTypes)
 						)
+				)
+				.addSubcommand((subcommand) =>
+					subcommand
+						.setName('getraw')
+						.setDescription('Get a target message and send raw content to dump channel')
+						.addStringOption((option) => option.setName('link').setDescription('Message\'s link to retrieve').setRequired(true))
 				)
 		);
 

@@ -4,23 +4,24 @@ import { envParseString } from '@skyra/env-utilities';
 import {
 	ActionRowBuilder,
 	ApplicationCommandOptionAllowedChannelTypes,
+	AttachmentBuilder,
+	ButtonBuilder,
+	ButtonStyle,
 	ChannelSelectMenuBuilder,
 	ChannelSelectMenuInteraction,
 	ChannelType,
 	ChatInputCommandInteraction,
-	ComponentType,
 	ContainerBuilder,
-	GuildMember,
-	InteractionEditReplyOptions,
-	InteractionUpdateOptions,
+	escapeMarkdown,
 	MessageActionRowComponentBuilder,
-	MessageFlags,
 	SeparatorBuilder,
 	SeparatorSpacingSize,
+	TextChannel,
 	TextDisplayBuilder
 } from 'discord.js';
 import { sendLongMessageAsync } from '../utils/methods/channelMethods';
-import { isBotMessage, isMessageOwner } from '../utils/methods/messageMethods';
+import { buildRawMessage, interactionRespond, verifyMessage } from '../utils/methods/messageMethods';
+import { Roles } from '../utils/roles';
 
 export type BroadcastInteraction = ChatInputCommandInteraction | ChannelSelectMenuInteraction;
 
@@ -34,6 +35,7 @@ export const sendSelectChannelTypes: ApplicationCommandOptionAllowedChannelTypes
 
 export enum BroadcastVariables {
 	ChannelSelectCustomId = 'broadcastSendChannelSelect',
+	ButtonGetRawCustomId = 'broadcastGetRawButton',
 	LinkTextDisplayOptionId = 636074777,
 	ContainerId = 72184951
 }
@@ -57,58 +59,22 @@ export const broadcastContainerBuilder = (channelId: string, messageId: string) 
 					.setPlaceholder('Select the channel to send the message to')
 					.addChannelTypes(sendSelectChannelTypes)
 			)
+		)
+		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
+		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# Get Raw\nSend raw content of the message to dump channel :'))
+		.addActionRowComponents(
+			new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+				new ButtonBuilder()
+				.setCustomId(`${BroadcastVariables.ButtonGetRawCustomId}`)
+				.setLabel("Get Raw")
+				.setStyle(ButtonStyle.Primary)
+			)
 		);
 
+// BROADCAST SEND
 export const sendBroadcast = async (interaction: BroadcastInteraction) => {
-	if (interaction instanceof ChatInputCommandInteraction && !interaction.deferred && !interaction.replied)
-		await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-
-	const interactionMember =
-		interaction.member instanceof GuildMember ? interaction.member : await interaction.guild?.members.fetch(interaction.user.id);
-	if (!interactionMember) {
-		return interactionRespond(interaction, '❌ Member not found');
-	}
-
-	let link = interaction instanceof ChatInputCommandInteraction ? interaction.options.getString('link', true) : '';
-
-	if (interaction instanceof ChannelSelectMenuInteraction) {
-		const broadcastContainer = interaction.message.components.find((c) => c.id === BroadcastVariables.ContainerId);
-		if (!broadcastContainer || broadcastContainer.type !== ComponentType.Container) throw new Error('Broadcast container not found');
-
-		const textDisplayComponent = broadcastContainer?.components.find((c) => c.id === BroadcastVariables.LinkTextDisplayOptionId);
-		if (!textDisplayComponent || textDisplayComponent.type !== ComponentType.TextDisplay) throw new Error('Text display component not found');
-
-		link = textDisplayComponent.content;
-	}
-
-	// Parse Discord link: https://discord.com/channels/{guildId}/{channelId}/{messageId}
-	const urlRegex = /^https?:\/\/(?:ptb\.|canary\.)?discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
-	const match = link.match(urlRegex);
-
-	if (!match) {
-		return interactionRespond(interaction, '❌ Lien invalide. Format attendu: https://discord.com/channels/{guildId}/{channelId}/{messageId}');
-	}
-
-	const [_, _guildId, channelId, messageId] = match;
-
-	// Fetch source channel
-	const channel = await interaction.client.channels.fetch(channelId);
-	if (!channel || !channel.isTextBased()) {
-		return interactionRespond(interaction, '❌ Channel introuvable ou inaccessible ');
-	}
-
-	// Fetch source message
-	const message = await channel.messages.fetch(messageId);
-	if (!message) {
-		return interactionRespond(interaction, '❌ Message introuvable');
-	}
-
-	if (isBotMessage(message)) {
-		return interactionRespond(interaction, '❌ Vous ne pouvez pas broadcast un message du bot');
-	}
-
-	if (!isMessageOwner(message, interactionMember))
-		return interactionRespond(interaction, "❌ Vous ne pouvez pas broadcast un message qui n'est pas votre");
+	
+	const message = await verifyMessage(interaction, false, false);
 
 	// Get target channel
 	let broadcastChannel = interaction.isChatInputCommand() ? interaction.options.getChannel('channel', true) : interaction.channel;
@@ -138,10 +104,43 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 	}
 };
 
-const interactionRespond = async (interaction: BroadcastInteraction, content: string) => {
-	if (interaction instanceof ChannelSelectMenuInteraction) {
-		return interaction.update({ components: [new TextDisplayBuilder().setContent(content)] } as InteractionUpdateOptions);
+// BROADCAST GET RAW
+export const getRawBroadcast = async (interaction: BroadcastInteraction) => {
+
+	const message = await verifyMessage(interaction, true, true);
+	
+	try {
+		// Récupérer le canal Dump
+		const dumpChannel = await container.client.channels.fetch(Roles.DUMP);
+		if (!dumpChannel || !dumpChannel.isTextBased()) {
+			return interactionRespond(interaction, '❌ Canal Dump introuvable ou inaccessible');
+		}
+
+		// Construire le contenu raw
+		const rawContent = buildRawMessage(message);
+
+		// Vérifier si le contenu dépasse 2000 caractères
+		if (rawContent.length > 2000) {
+			// Envoyer en fichier .txt
+			const attachment = new AttachmentBuilder(Buffer.from(rawContent, 'utf-8'), {
+				name: `raw-message-${message.id}.txt`
+			});
+
+			await (dumpChannel as TextChannel).send({
+				content: `**Raw message from ${escapeMarkdown(message.author.tag)}** (<@${message.author.id}>)\n**Original:** ${message.url}`,
+				files: [attachment]
+			});
+		} else {
+			// Envoyer directement
+			await (dumpChannel as TextChannel).send({
+				content: `**Raw message from ${escapeMarkdown(message.author.tag)}** (<@${message.author.id}>)\n**Original:** ${message.url}\n\n${rawContent}`
+			});
+		}
+
+		return interactionRespond(interaction, '✅ Message raw envoyé dans le canal Dump avec succès!');
+	} catch (error) {
+		container.logger.error('Erreur lors du getRaw:', error);
+		return interactionRespond(interaction, "❌ Erreur lors de l'envoi du message raw. Vérifiez les permissions du bot.");
 	}
 
-	return interaction.editReply({ content } as InteractionEditReplyOptions);
 };
