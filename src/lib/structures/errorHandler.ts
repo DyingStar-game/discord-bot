@@ -40,7 +40,7 @@ interface LogMetadata {
 	channel?: string;
 }
 
-const STACK_CHUNK_SIZE = 950;
+// const STACK_CHUNK_SIZE = 950;
 
 export class ErrorHandler {
 	private logChannelId: string | null;
