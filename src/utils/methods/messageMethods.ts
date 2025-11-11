@@ -1,4 +1,4 @@
-import { ChannelSelectMenuInteraction, ChatInputCommandInteraction, ComponentType, escapeMarkdown, GuildMember, InteractionEditReplyOptions, InteractionUpdateOptions, Message, MessageFlags, TextDisplayBuilder } from 'discord.js';
+import { ButtonInteraction, ChannelSelectMenuInteraction, ChatInputCommandInteraction, ComponentType, escapeMarkdown, GuildMember, InteractionEditReplyOptions, InteractionUpdateOptions, Message, MessageFlags, TextDisplayBuilder } from 'discord.js';
 import { BroadcastInteraction, BroadcastVariables } from '../../Services/broadcast.service';
 
 /**
@@ -30,9 +30,9 @@ export const isMessageOwner = (message: Message, member: GuildMember) => {
 };
 
 /**
- * 
+ * Check the integrity of the message and the rights associated with it
  * @param interaction - Current interaction
- * @returns 
+ * @returns Message<boolean> - Message to work with
  */
 export const verifyMessage = async (interaction: BroadcastInteraction, allowBot: boolean, allowUnpersonnal: boolean) => {
 	if (interaction instanceof ChatInputCommandInteraction && !interaction.deferred && !interaction.replied)
@@ -47,7 +47,7 @@ export const verifyMessage = async (interaction: BroadcastInteraction, allowBot:
 
 	let link = interaction instanceof ChatInputCommandInteraction ? interaction.options.getString('link', true) : '';
 
-	if (interaction instanceof ChannelSelectMenuInteraction) {
+	if (interaction instanceof ChannelSelectMenuInteraction || interaction instanceof ButtonInteraction) {
 		const broadcastContainer = interaction.message.components.find((c) => c.id === BroadcastVariables.ContainerId);
 		if (!broadcastContainer || broadcastContainer.type !== ComponentType.Container) throw new Error('Broadcast container not found');
 
@@ -60,6 +60,7 @@ export const verifyMessage = async (interaction: BroadcastInteraction, allowBot:
 	// Parse Discord link: https://discord.com/channels/{guildId}/{channelId}/{messageId}
 	const urlRegex = /^https?:\/\/(?:ptb\.|canary\.)?discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
 	const match = link.match(urlRegex);
+	console.log('LINK => ' + link);
 
 	if (!match) {
 		interactionRespond(interaction, '❌ Lien invalide. Format attendu: https://discord.com/channels/{guildId}/{channelId}/{messageId}');
@@ -95,11 +96,15 @@ export const verifyMessage = async (interaction: BroadcastInteraction, allowBot:
 	return message;
 }
 
-//BUILD RAW MESSAGE
+/**
+ * Build new message with original RAW message and different metadata  
+ * @param message 
+ * @returns parts string[] - Different part of the return message
+ */
 export const buildRawMessage = (message: Message): string => {
 	const parts: string[] = [];
 
-	// === CONTENU TEXTE ===
+	// === TEST CONTENT ===
 	if (message.content) {
 		parts.push('**📝 Content:**');
 		parts.push('```');
@@ -108,7 +113,7 @@ export const buildRawMessage = (message: Message): string => {
 		parts.push('```');
 	}
 
-	// === PIÈCES JOINTES ===
+	// === ATTACHMENTS ===
 	if (message.attachments.size > 0) {
 		parts.push('\n**📎 Attachments:**');
 		message.attachments.forEach((att, index) => {
@@ -161,9 +166,14 @@ export const buildRawMessage = (message: Message): string => {
 	return parts.join('\n');
 };
 
-// RESPONSE
+/**
+ * Response to interaction
+ * @param interaction - Current interaction
+ * @param content - Content of response
+ * @returns Promise<message<boolean>>
+ */
 export const interactionRespond = async (interaction: BroadcastInteraction, content: string) => {
-	if (interaction instanceof ChannelSelectMenuInteraction) {
+	if (interaction instanceof ChannelSelectMenuInteraction || interaction instanceof ButtonInteraction) {
 		return interaction.update({ components: [new TextDisplayBuilder().setContent(content)] } as InteractionUpdateOptions);
 	}
 

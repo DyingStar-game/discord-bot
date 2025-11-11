@@ -6,6 +6,7 @@ import {
 	ApplicationCommandOptionAllowedChannelTypes,
 	AttachmentBuilder,
 	ButtonBuilder,
+	ButtonInteraction,
 	ButtonStyle,
 	ChannelSelectMenuBuilder,
 	ChannelSelectMenuInteraction,
@@ -23,7 +24,7 @@ import { sendLongMessageAsync } from '../utils/methods/channelMethods';
 import { buildRawMessage, interactionRespond, verifyMessage } from '../utils/methods/messageMethods';
 import { Roles } from '../utils/roles';
 
-export type BroadcastInteraction = ChatInputCommandInteraction | ChannelSelectMenuInteraction;
+export type BroadcastInteraction = ChatInputCommandInteraction | ChannelSelectMenuInteraction | ButtonInteraction;
 
 export const sendSelectChannelTypes: ApplicationCommandOptionAllowedChannelTypes[] = [
 	ChannelType.GuildText,
@@ -110,18 +111,18 @@ export const getRawBroadcast = async (interaction: BroadcastInteraction) => {
 	const message = await verifyMessage(interaction, true, true);
 	
 	try {
-		// Récupérer le canal Dump
+		// Get DUMP channel
 		const dumpChannel = await container.client.channels.fetch(Roles.DUMP);
 		if (!dumpChannel || !dumpChannel.isTextBased()) {
 			return interactionRespond(interaction, '❌ Canal Dump introuvable ou inaccessible');
 		}
 
-		// Construire le contenu raw
+		// Build RAW content
 		const rawContent = buildRawMessage(message);
 
-		// Vérifier si le contenu dépasse 2000 caractères
+		// Check if content is over 2000 characters
 		if (rawContent.length > 2000) {
-			// Envoyer en fichier .txt
+			// Send file .txt
 			const attachment = new AttachmentBuilder(Buffer.from(rawContent, 'utf-8'), {
 				name: `raw-message-${message.id}.txt`
 			});
@@ -131,7 +132,7 @@ export const getRawBroadcast = async (interaction: BroadcastInteraction) => {
 				files: [attachment]
 			});
 		} else {
-			// Envoyer directement
+			// Send
 			await (dumpChannel as TextChannel).send({
 				content: `**Raw message from ${escapeMarkdown(message.author.tag)}** (<@${message.author.id}>)\n**Original:** ${message.url}\n\n${rawContent}`
 			});
