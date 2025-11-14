@@ -2,9 +2,11 @@ import type {
 	AutocompleteInteractionPayload,
 	ChatInputCommandDeniedPayload,
 	ChatInputCommandErrorPayload,
+	ContextMenuCommandDeniedPayload,
 	ContextMenuCommandErrorPayload,
 	InteractionHandlerError,
 	ListenerErrorPayload,
+	MessageCommandDeniedPayload,
 	MessageCommandErrorPayload
 } from '@sapphire/framework';
 import { Command, container, Events, SapphireClient, UserError } from '@sapphire/framework';
@@ -40,12 +42,10 @@ interface LogMetadata {
 	channel?: string;
 }
 
-// const STACK_CHUNK_SIZE = 950;
-
 export class ErrorHandler {
 	private logChannelId: string | null;
-	private logChannelResolved = false;
 	private logChannel: GuildTextBasedChannel | null = null;
+	private logChannelFetchFailed = false;
 
 	private readonly client: SapphireClient;
 
@@ -92,6 +92,21 @@ export class ErrorHandler {
 		});
 	}
 
+	public async handleContextMenuCommandDenied(error: Error, payload: ContextMenuCommandDeniedPayload) {
+		const { interaction, command } = payload;
+		const context: InteractionContext = { commandName: command?.name };
+
+		await this.sendUserFeedback(error, interaction as RepliableInteraction, `Commande contextuelle \`${command?.name ?? 'inconnue'}\``, context);
+
+		await this.propagate(this.normalizeError(error), {
+			scope: Events.ContextMenuCommandDenied,
+			commandName: command?.name,
+			user: this.formatUser(interaction.user),
+			guild: interaction.guild?.name,
+			channel: interaction.channel?.toString()
+		});
+	}
+
 	public async handleContextMenuCommandError(error: Error, payload: ContextMenuCommandErrorPayload) {
 		const { interaction, command } = payload;
 		const context: InteractionContext = { commandName: command?.name };
@@ -104,6 +119,21 @@ export class ErrorHandler {
 			user: this.formatUser(interaction.user),
 			guild: interaction.guild?.name,
 			channel: interaction.channel?.toString()
+		});
+	}
+
+	public async handleMessageCommandDenied(error: Error, payload: MessageCommandDeniedPayload) {
+		const { message, command } = payload;
+		const context: MessageContext = { commandName: command?.name };
+
+		await this.sendMessageFeedback(error, message, context);
+
+		await this.propagate(this.normalizeError(error), {
+			scope: Events.MessageCommandDenied,
+			commandName: command?.name,
+			user: this.formatUser(message.author),
+			guild: message.guild?.name,
+			channel: message.channel?.toString()
 		});
 	}
 
@@ -296,21 +326,6 @@ export class ErrorHandler {
 			});
 		}
 
-		//TODO Test this
-		// const stack = error.stack ?? null;
-		// if (stack) {
-		// 	const stackBody = stack.replace(`${error.name}: ${error.message}`, '').trim() || stack;
-		// 	const stackChunks = splitIntoChunks(stackBody, STACK_CHUNK_SIZE);
-
-		// 	stackChunks.forEach((chunk, index) => {
-		// 		fields.push({
-		// 			name: index === 0 ? 'Stack' : '\u200b',
-		// 			value: `\`\`\`ts\n${chunk}\n\`\`\``,
-		// 			inline: false
-		// 		});
-		// 	});
-		// }
-
 		return embed;
 	}
 
@@ -342,11 +357,13 @@ export class ErrorHandler {
 	}
 
 	private async resolveLogChannel(): Promise<GuildTextBasedChannel | null> {
-		if (this.logChannelResolved) return this.logChannel;
-		this.logChannelResolved = true;
+		if (this.logChannel && this.logChannel.isSendable()) return this.logChannel;
 
 		if (!this.logChannelId) {
-			this.client.logger.error("Aucun salon de log d'erreurs configuré (ERROR_LOG_CHANNEL_ID).");
+			if (!this.logChannelFetchFailed) {
+				this.client.logger.error("Aucun salon de log d'erreurs configuré (ERROR_LOG_CHANNEL_ID).");
+				this.logChannelFetchFailed = true;
+			}
 			return null;
 		}
 
@@ -354,20 +371,30 @@ export class ErrorHandler {
 			const channel = await this.client.channels.fetch(this.logChannelId);
 
 			if (!channel || !channel.isTextBased() || channel.isDMBased()) {
-				this.client.logger.warn(`Le salon configuré (${this.logChannelId}) n'est pas un salon textuel de serveur.`);
+				if (!this.logChannelFetchFailed) {
+					this.client.logger.warn(`Le salon configuré (${this.logChannelId}) n'est pas un salon textuel de serveur.`);
+					this.logChannelFetchFailed = true;
+				}
 				return null;
 			}
 
 			this.logChannel = channel as GuildTextBasedChannel;
+			this.logChannelFetchFailed = false;
 			return this.logChannel;
 		} catch (fetchError) {
-			this.client.logger.error('Impossible de récupérer le salon de log des erreurs', fetchError);
+			if (!this.logChannelFetchFailed) {
+				this.client.logger.error('Impossible de récupérer le salon de log des erreurs', fetchError);
+				this.logChannelFetchFailed = true;
+			}
+			this.logChannel = null;
 			return null;
 		}
 	}
 
-	private shouldSilence(error: Error) {
-		return this.isUserError(error) && Reflect.get(Object(error.context ?? {}), 'silent');
+	private shouldSilence(error: Error): boolean {
+		if (!this.isUserError(error)) return false;
+		const context = error.context as { silent?: boolean } | undefined;
+		return context?.silent === true;
 	}
 
 	private isUserError(error: unknown): error is UserError {
