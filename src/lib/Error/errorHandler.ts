@@ -10,15 +10,8 @@ import type {
 	MessageCommandErrorPayload
 } from '@sapphire/framework';
 import { Command, container, Events, SapphireClient, UserError } from '@sapphire/framework';
-import {
-	APIEmbedField,
-	BaseInteraction,
-	MessageFlags,
-	type GuildTextBasedChannel,
-	type Interaction,
-	type Message,
-	type RepliableInteraction
-} from 'discord.js';
+import { APIEmbedField, BaseInteraction, MessageFlags, type Interaction, type Message, type RepliableInteraction } from 'discord.js';
+import { resolveLogChannel } from '../../utils/helper/channelHelper';
 import { DefaultEmbedBuilder, EmbedColor } from '../../utils/helper/embed.helper';
 import { ServiceException } from './class/serviceException';
 
@@ -39,15 +32,10 @@ interface LogMetadata {
 }
 
 export class ErrorHandler {
-	private logChannelId: string | null;
-	private logChannel: GuildTextBasedChannel | null = null;
-	private logChannelFetchFailed = false;
-
 	private readonly client: SapphireClient;
 
 	public constructor(client: SapphireClient) {
 		this.client = client;
-		this.logChannelId = process.env.ERROR_LOG_CHANNEL_ID ?? null;
 	}
 
 	public registerProcessListeners() {
@@ -328,7 +316,7 @@ export class ErrorHandler {
 		this.logError(error, metadata);
 
 		const embed = this.buildLogEmbed(error, metadata);
-		const channel = await this.resolveLogChannel();
+		const channel = await resolveLogChannel();
 
 		if (!channel) return;
 
@@ -336,41 +324,6 @@ export class ErrorHandler {
 			await channel.send({ embeds: [embed] });
 		} catch (sendError) {
 			this.client.logger.error('Impossible de transmettre une erreur dans le salon de log', sendError);
-		}
-	}
-
-	private async resolveLogChannel(): Promise<GuildTextBasedChannel | null> {
-		if (this.logChannel && this.logChannel.isSendable()) return this.logChannel;
-
-		if (!this.logChannelId) {
-			if (!this.logChannelFetchFailed) {
-				this.client.logger.error("Aucun salon de log d'erreurs configuré (ERROR_LOG_CHANNEL_ID).");
-				this.logChannelFetchFailed = true;
-			}
-			return null;
-		}
-
-		try {
-			const channel = await this.client.channels.fetch(this.logChannelId);
-
-			if (!channel || !channel.isTextBased() || channel.isDMBased()) {
-				if (!this.logChannelFetchFailed) {
-					this.client.logger.warn(`Le salon configuré (${this.logChannelId}) n'est pas un salon textuel de serveur.`);
-					this.logChannelFetchFailed = true;
-				}
-				return null;
-			}
-
-			this.logChannel = channel as GuildTextBasedChannel;
-			this.logChannelFetchFailed = false;
-			return this.logChannel;
-		} catch (fetchError) {
-			if (!this.logChannelFetchFailed) {
-				this.client.logger.error('Impossible de récupérer le salon de log des erreurs', fetchError);
-				this.logChannelFetchFailed = true;
-			}
-			this.logChannel = null;
-			return null;
 		}
 	}
 

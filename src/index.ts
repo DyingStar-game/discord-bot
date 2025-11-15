@@ -3,6 +3,7 @@ import './lib/setup';
 import { container, LogLevel, SapphireClient } from '@sapphire/framework';
 import { GatewayIntentBits, Partials } from 'discord.js';
 import { ErrorHandler } from './lib/Error/errorHandler';
+import { LogHandler } from './lib/logging/logHandler';
 
 const client = new SapphireClient({
 	logger: {
@@ -25,9 +26,17 @@ const client = new SapphireClient({
 	partials: [Partials.Channel]
 });
 
+container.logHandler = new LogHandler(client);
+client.logHandler = container.logHandler;
+
 container.errorHandler = new ErrorHandler(client);
 client.errorHandler = container.errorHandler;
 client.errorHandler.registerProcessListeners();
+
+container.guildId = process.env.GUILD_ID ?? undefined;
+if (!container.guildId) {
+	throw new Error('GUILD_ID is not set');
+}
 
 const main = async () => {
 	try {
@@ -42,3 +51,9 @@ const main = async () => {
 };
 
 void main();
+
+declare module '@sapphire/pieces' {
+	interface Container {
+		guildId: string | undefined;
+	}
+}

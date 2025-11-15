@@ -37,7 +37,7 @@ export class PingCommand extends Command {
 		throw new UserError({
 			identifier: interaction.commandName,
 			message: 'Lutilisateur nexiste pas',
-			context: { silent: false, interaction, command: this }
+			context: { interaction, command: this }
 		});
 	}
 
@@ -45,7 +45,7 @@ export class PingCommand extends Command {
 		throw new ServiceException({
 			identifier: interaction.commandName,
 			message: 'Lutilisateur nexiste pas',
-			context: { silent: true, interaction, command: this }
+			context: { interaction, command: this }
 		});
 	}
 }
