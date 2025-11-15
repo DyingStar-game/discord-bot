@@ -1,6 +1,5 @@
 import { ApplyOptions } from '@sapphire/decorators';
-import type { Events, InteractionHandlerError } from '@sapphire/framework';
-import { Listener } from '@sapphire/framework';
+import { Events, InteractionHandlerError, Listener } from '@sapphire/framework';
 
 @ApplyOptions<Listener.Options>({ event: Events.InteractionHandlerError })
 export class InteractionHandlerErrorListener extends Listener<typeof Events.InteractionHandlerError> {
@@ -8,4 +7,3 @@ export class InteractionHandlerErrorListener extends Listener<typeof Events.Inte
 		await this.container.errorHandler.handleInteractionHandlerError(error, payload);
 	}
 }
-

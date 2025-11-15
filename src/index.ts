@@ -2,7 +2,7 @@ import './lib/setup';
 
 import { container, LogLevel, SapphireClient } from '@sapphire/framework';
 import { GatewayIntentBits, Partials } from 'discord.js';
-import { ErrorHandler } from './lib/structures/errorHandler';
+import { ErrorHandler } from './lib/Error/errorHandler';
 
 const client = new SapphireClient({
 	logger: {

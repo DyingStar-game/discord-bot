@@ -1,6 +1,7 @@
 import { ApplyOptions } from '@sapphire/decorators';
 import { Command, UserError } from '@sapphire/framework';
 import { ApplicationCommandType, ApplicationIntegrationType, InteractionContextType, MessageFlags } from 'discord.js';
+import { ServiceException } from '../../lib/Error/class/serviceException';
 
 @ApplyOptions<Command.Options>({
 	name: 'ping',
@@ -33,10 +34,18 @@ export class PingCommand extends Command {
 
 	public override async chatInputRun(interaction: Command.ChatInputCommandInteraction) {
 		await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-		throw new UserError({ identifier: 'ping_error', message: 'Ping error', context: { silent: true, interaction, command: this } });
+		throw new UserError({
+			identifier: interaction.commandName,
+			message: 'Lutilisateur nexiste pas',
+			context: { silent: false, interaction, command: this }
+		});
 	}
 
 	public override async contextMenuRun(interaction: Command.ContextMenuCommandInteraction) {
-		throw new UserError({ identifier: 'ping_error', message: 'Ping error', context: { silent: true, interaction, command: this } });
+		throw new ServiceException({
+			identifier: interaction.commandName,
+			message: 'Lutilisateur nexiste pas',
+			context: { silent: true, interaction, command: this }
+		});
 	}
 }

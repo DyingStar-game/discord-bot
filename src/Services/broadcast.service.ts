@@ -19,8 +19,8 @@ import {
 	SeparatorSpacingSize,
 	TextDisplayBuilder
 } from 'discord.js';
-import { sendLongMessageAsync } from '../utils/methods/channelMethods';
-import { isBotMessage, isMessageOwner } from '../utils/methods/messageMethods';
+import { sendLongMessageAsync } from '../utils/helper/channelHelper';
+import { isBotMessage, isMessageOwner } from '../utils/helper/messageHelper';
 
 export type BroadcastInteraction = ChatInputCommandInteraction | ChannelSelectMenuInteraction;
 

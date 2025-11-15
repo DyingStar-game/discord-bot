@@ -8,7 +8,7 @@ import {
 	ThreadChannel,
 	VoiceChannel
 } from 'discord.js';
-import { splitIntoChunks } from './stringMethods';
+import { splitIntoChunks } from './stringHelper';
 
 /**
  * Send a long message to a channel

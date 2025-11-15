@@ -1,6 +1,5 @@
 import { ApplyOptions } from '@sapphire/decorators';
-import type { AutocompleteInteractionPayload, Events } from '@sapphire/framework';
-import { Listener } from '@sapphire/framework';
+import { AutocompleteInteractionPayload, Events, Listener } from '@sapphire/framework';
 
 @ApplyOptions<Listener.Options>({ event: Events.CommandAutocompleteInteractionError })
 export class CommandAutocompleteInteractionErrorListener extends Listener<typeof Events.CommandAutocompleteInteractionError> {
@@ -8,4 +7,3 @@ export class CommandAutocompleteInteractionErrorListener extends Listener<typeof
 		await this.container.errorHandler.handleAutocompleteError(error, payload);
 	}
 }
-

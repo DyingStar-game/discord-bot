@@ -13,22 +13,18 @@ import { Command, container, Events, SapphireClient, UserError } from '@sapphire
 import {
 	APIEmbedField,
 	BaseInteraction,
-	EmbedBuilder,
 	MessageFlags,
-	User,
 	type GuildTextBasedChannel,
 	type Interaction,
 	type Message,
 	type RepliableInteraction
 } from 'discord.js';
+import { DefaultEmbedBuilder, EmbedColor } from '../../utils/helper/embed.helper';
+import { ServiceException } from './class/serviceException';
 
 interface InteractionContext {
 	commandName?: string;
 	componentCustomId?: string;
-}
-
-interface MessageContext {
-	commandName?: string;
 }
 
 interface LogMetadata {
@@ -64,9 +60,8 @@ export class ErrorHandler {
 
 	public async handleChatInputCommandDenied(error: Error, payload: ChatInputCommandDeniedPayload) {
 		const { interaction, command } = payload;
-		const context: InteractionContext = { commandName: command?.name };
 
-		await this.sendUserFeedback(error, interaction, `Commande slash \`${command?.name ?? 'inconnue'}\``, context);
+		await this.sendUserFeedback(error, interaction, `Commande slash \`${command?.name ?? 'inconnue'}\``);
 
 		await this.propagate(this.normalizeError(error), {
 			scope: Events.ChatInputCommandDenied,
@@ -79,9 +74,8 @@ export class ErrorHandler {
 
 	public async handleChatInputCommandError(error: Error, payload: ChatInputCommandErrorPayload) {
 		const { interaction, command } = payload;
-		const context: InteractionContext = { commandName: command?.name };
 
-		await this.sendUserFeedback(error, interaction, `Commande slash \`${command?.name ?? 'inconnue'}\``, context);
+		await this.sendUserFeedback(error, interaction, `Commande slash \`${command?.name ?? 'inconnue'}\``);
 
 		await this.propagate(this.normalizeError(error), {
 			scope: Events.ChatInputCommandError,
@@ -94,9 +88,8 @@ export class ErrorHandler {
 
 	public async handleContextMenuCommandDenied(error: Error, payload: ContextMenuCommandDeniedPayload) {
 		const { interaction, command } = payload;
-		const context: InteractionContext = { commandName: command?.name };
 
-		await this.sendUserFeedback(error, interaction as RepliableInteraction, `Commande contextuelle \`${command?.name ?? 'inconnue'}\``, context);
+		await this.sendUserFeedback(error, interaction as RepliableInteraction, `Commande contextuelle \`${command?.name ?? 'inconnue'}\``);
 
 		await this.propagate(this.normalizeError(error), {
 			scope: Events.ContextMenuCommandDenied,
@@ -109,9 +102,8 @@ export class ErrorHandler {
 
 	public async handleContextMenuCommandError(error: Error, payload: ContextMenuCommandErrorPayload) {
 		const { interaction, command } = payload;
-		const context: InteractionContext = { commandName: command?.name };
 
-		await this.sendUserFeedback(error, interaction as RepliableInteraction, `Commande contextuelle \`${command?.name ?? 'inconnue'}\``, context);
+		await this.sendUserFeedback(error, interaction as RepliableInteraction, `Commande contextuelle \`${command?.name ?? 'inconnue'}\``);
 
 		await this.propagate(this.normalizeError(error), {
 			scope: Events.ContextMenuCommandError,
@@ -124,9 +116,8 @@ export class ErrorHandler {
 
 	public async handleMessageCommandDenied(error: Error, payload: MessageCommandDeniedPayload) {
 		const { message, command } = payload;
-		const context: MessageContext = { commandName: command?.name };
 
-		await this.sendMessageFeedback(error, message, context);
+		await this.sendMessageFeedback(error, message);
 
 		await this.propagate(this.normalizeError(error), {
 			scope: Events.MessageCommandDenied,
@@ -139,9 +130,8 @@ export class ErrorHandler {
 
 	public async handleMessageCommandError(error: Error, payload: MessageCommandErrorPayload) {
 		const { message, command } = payload;
-		const context: MessageContext = { commandName: command?.name };
 
-		await this.sendMessageFeedback(error, message, context);
+		await this.sendMessageFeedback(error, message);
 
 		await this.propagate(this.normalizeError(error), {
 			scope: Events.MessageCommandError,
@@ -157,7 +147,7 @@ export class ErrorHandler {
 		const context: InteractionContext = { componentCustomId: this.extractCustomId(interaction) };
 
 		if (interaction.isRepliable()) {
-			await this.sendUserFeedback(error, interaction, `Interaction handler \`${handler.name}\``, context);
+			await this.sendUserFeedback(error, interaction, `Interaction handler \`${handler.name}\``);
 		}
 
 		await this.propagate(this.normalizeError(error), {
@@ -243,10 +233,10 @@ export class ErrorHandler {
 		await this.propagate(error, { scope: type, extraFields });
 	}
 
-	private async sendUserFeedback(error: Error, interaction: RepliableInteraction, label: string, context: InteractionContext) {
+	private async sendUserFeedback(error: Error, interaction: RepliableInteraction, label: string) {
 		if (this.shouldSilence(error)) return;
 
-		const embed = this.buildUserEmbed(error, interaction.user, label, interaction.id, context.commandName);
+		const embed = this.buildUserEmbed(error, label, interaction.id);
 
 		try {
 			if (interaction.deferred || interaction.replied) {
@@ -259,16 +249,10 @@ export class ErrorHandler {
 		}
 	}
 
-	private async sendMessageFeedback(error: Error, message: Message, context: MessageContext) {
+	private async sendMessageFeedback(error: Error, message: Message) {
 		if (this.shouldSilence(error)) return;
 
-		const embed = this.buildUserEmbed(
-			error,
-			message.author,
-			`Commande message \`${context.commandName ?? 'inconnue'}\``,
-			message.id,
-			context.commandName
-		);
+		const embed = this.buildUserEmbed(error, `Commande message \`${message.id}\``, message.id);
 
 		try {
 			await message.reply({ embeds: [embed], allowedMentions: { repliedUser: false } });
@@ -277,30 +261,30 @@ export class ErrorHandler {
 		}
 	}
 
-	private buildUserEmbed(error: Error, user: User, title: string, correlationId: string, commandName?: string) {
+	private buildUserEmbed(error: Error, title: string, correlationId: string) {
 		const isUserError = this.isUserError(error);
 		const description = isUserError ? error.message : "Une erreur inattendue s'est produite. Merci de réessayer plus tard.";
 
-		const embed = new EmbedBuilder()
-			.setColor(isUserError ? 0xf1c40f : 0xe74c3c)
+		const embed = DefaultEmbedBuilder({
+			color: isUserError ? EmbedColor.WARNING : EmbedColor.ERROR,
+			footer: {
+				text: `Correlation ID: ${correlationId}`
+			}
+		})
 			.setTitle(`❌ ${title}`)
-			.setDescription(this.truncate(description, 4000))
-			.setTimestamp()
-			.addFields({ name: 'Correlation ID', value: `\`${correlationId}\``, inline: false })
-			.setFooter({ text: `Commande: ${commandName ?? 'inconnue'} • Utilisateur: ${user.tag} (${user.id})` });
-
-		if (isUserError && error.identifier) {
-			embed.addFields({ name: 'Identifiant', value: `\`${error.identifier}\`` });
-		}
+			.setDescription(this.truncate(description, 4000));
 
 		return embed;
 	}
 
 	private buildLogEmbed(error: Error, metadata: LogMetadata) {
-		const embed = new EmbedBuilder()
-			.setColor(this.isUserError(error) ? 0xf1c40f : 0xe74c3c)
+		const isUserError = this.isUserError(error);
+		const isServiceException = this.isServiceException(error);
+
+		const embed = DefaultEmbedBuilder({
+			color: isServiceException ? EmbedColor.ERROR : EmbedColor.WARNING
+		})
 			.setTitle(`🚨 Erreur : ${metadata.scope}`)
-			.setTimestamp()
 			.setDescription(`\`${this.truncate(error.message, 100)}\``);
 
 		if (metadata.commandName) embed.addFields({ name: 'Commande', value: `\`${metadata.commandName}\`` });
@@ -311,7 +295,7 @@ export class ErrorHandler {
 		if (metadata.interaction) embed.addFields({ name: 'Locale', value: metadata.interaction.locale ?? 'inconnue' });
 		if (metadata.extraFields?.length) embed.addFields(...metadata.extraFields);
 
-		const identifier = this.isUserError(error) && error.identifier ? `\`${error.identifier}\`` : null;
+		const identifier = isUserError || isServiceException ? `\`${error.identifier}\`` : null;
 		const summary = `${error.name}: ${error.message}`;
 
 		embed.addFields({
@@ -319,10 +303,10 @@ export class ErrorHandler {
 			value: this.truncate(summary, 1010)
 		});
 
-		if (error.stack) {
+		if (error.stack && isServiceException) {
 			embed.addFields({
 				name: 'Stack',
-				value: `\`\`\`ts\n${this.truncate(error.stack, 1010)}\n\`\`\``
+				value: `\`\`\`ts\n${this.truncate(error.stack, 200)}\n\`\`\``
 			});
 		}
 
@@ -333,8 +317,7 @@ export class ErrorHandler {
 		const prefix = `[${metadata.scope}]${metadata.commandName ? `(${metadata.commandName})` : ''}`;
 
 		if (this.isUserError(error)) {
-			const identifier = error.identifier ? ` (${error.identifier})` : '';
-			this.client.logger.warn(`${prefix}${identifier}: ${error.message}`);
+			this.client.logger.warn(`${prefix}: ${error.message}`);
 			return;
 		}
 
@@ -399,6 +382,10 @@ export class ErrorHandler {
 
 	private isUserError(error: unknown): error is UserError {
 		return error instanceof UserError;
+	}
+
+	private isServiceException(error: unknown): error is ServiceException {
+		return error instanceof ServiceException;
 	}
 
 	private extractCustomId(interaction: Interaction) {
