@@ -4,7 +4,6 @@ import { envParseString } from '@skyra/env-utilities';
 import {
 	ActionRowBuilder,
 	ApplicationCommandOptionAllowedChannelTypes,
-	AttachmentBuilder,
 	ButtonBuilder,
 	ButtonInteraction,
 	ButtonStyle,
@@ -13,18 +12,22 @@ import {
 	ChannelType,
 	ChatInputCommandInteraction,
 	ContainerBuilder,
+	ContextMenuCommandInteraction,
 	escapeMarkdown,
 	MessageActionRowComponentBuilder,
+	MessageFlags,
+	ModalBuilder,
+	ModalSubmitInteraction,
 	SeparatorBuilder,
 	SeparatorSpacingSize,
-	TextChannel,
-	TextDisplayBuilder
+	TextDisplayBuilder,
+	TextInputBuilder,
+	TextInputStyle
 } from 'discord.js';
 import { sendLongMessageAsync } from '../utils/methods/channelMethods';
-import { buildRawMessage, interactionRespond, verifyMessage } from '../utils/methods/messageMethods';
-import { Roles } from '../utils/roles';
+import { buildSimpleRawMessage, interactionRespond, protectBackticks, verifyMessage } from '../utils/methods/messageMethods';
 
-export type BroadcastInteraction = ChatInputCommandInteraction | ChannelSelectMenuInteraction | ButtonInteraction;
+export type BroadcastInteraction = ChatInputCommandInteraction | ChannelSelectMenuInteraction | ButtonInteraction | ContextMenuCommandInteraction;
 
 export const sendSelectChannelTypes: ApplicationCommandOptionAllowedChannelTypes[] = [
 	ChannelType.GuildText,
@@ -37,8 +40,11 @@ export const sendSelectChannelTypes: ApplicationCommandOptionAllowedChannelTypes
 export enum BroadcastVariables {
 	ChannelSelectCustomId = 'broadcastSendChannelSelect',
 	ButtonGetRawCustomId = 'broadcastGetRawButton',
+	ButtonUpdateRawCustomId = 'broadcastUpdateRawButton',
+	ModalUpdateRawId = 'broadcastUpdateRawModal',
 	LinkTextDisplayOptionId = 636074777,
-	ContainerId = 72184951
+	LinkTextDisplayRawId = 636074778,
+	ContainerId = 72184951,
 }
 
 export const broadcastContainerBuilder = (channelId: string, messageId: string) =>
@@ -62,12 +68,22 @@ export const broadcastContainerBuilder = (channelId: string, messageId: string) 
 			)
 		)
 		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
-		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# Get Raw\nSend raw content of the message to dump channel :'))
+		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# Get raw content\nSend raw content of the message to dump channel :'))
 		.addActionRowComponents(
 			new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
 				new ButtonBuilder()
 				.setCustomId(`${BroadcastVariables.ButtonGetRawCustomId}`)
 				.setLabel("Get Raw")
+				.setStyle(ButtonStyle.Primary)
+			)
+		)
+		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
+		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# Update content\nUpdate content of the message :'))
+		.addActionRowComponents(
+			new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+				new ButtonBuilder()
+				.setCustomId(`${BroadcastVariables.ButtonUpdateRawCustomId}`)
+				.setLabel("Update Raw")
 				.setStyle(ButtonStyle.Primary)
 			)
 		);
@@ -105,43 +121,82 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 	}
 };
 
-// BROADCAST GET RAW
-export const getRawBroadcast = async (interaction: BroadcastInteraction) => {
+// BROADCAST UPDATE RAW MODAL
+export const updateRawBroadcastModal = async (interaction: BroadcastInteraction) => {
 
 	const message = await verifyMessage(interaction, true, true);
 	
 	try {
-		// Get DUMP channel
-		const dumpChannel = await container.client.channels.fetch(Roles.DUMP);
-		if (!dumpChannel || !dumpChannel.isTextBased()) {
-			return interactionRespond(interaction, '❌ Canal Dump introuvable ou inaccessible');
-		}
+		// Get simple raw content with attachments
+		const rawContent = buildSimpleRawMessage(message);
 
-		// Build RAW content
-		const rawContent = buildRawMessage(message);
+		// Create modal with raw content
+		const modal = new ModalBuilder()
+			.setCustomId(BroadcastVariables.ModalUpdateRawId)
+			.setTitle('Raw Message Content');
 
-		// Check if content is over 2000 characters
-		if (rawContent.length > 2000) {
-			// Send file .txt
-			const attachment = new AttachmentBuilder(Buffer.from(rawContent, 'utf-8'), {
-				name: `raw-message-${message.id}.txt`
-			});
+		const rawContentInput = new TextInputBuilder()
+			.setCustomId('rawContentField')
+			.setLabel('Message Content')
+			.setStyle(TextInputStyle.Paragraph)
+			.setValue(rawContent)
+			.setRequired(true);
 
-			await (dumpChannel as TextChannel).send({
-				content: `**Raw message from ${escapeMarkdown(message.author.tag)}** (<@${message.author.id}>)\n**Original:** ${message.url}`,
-				files: [attachment]
-			});
-		} else {
-			// Send
-			await (dumpChannel as TextChannel).send({
-				content: `**Raw message from ${escapeMarkdown(message.author.tag)}** (<@${message.author.id}>)\n**Original:** ${message.url}\n\n${rawContent}`
-			});
-		}
+		const metadataInput = new TextInputBuilder()
+			.setCustomId('metadataField')
+			.setLabel('Metadata (Read-only)')
+			.setStyle(TextInputStyle.Paragraph)
+			.setValue(`Original: ${message.url}\nAuthor: ${message.author.tag}\nMessage ID: ${message.id}`)
+			.setRequired(false);
 
-		return interactionRespond(interaction, '✅ Message raw envoyé dans le canal Dump avec succès!');
+		const firstActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(rawContentInput);
+		const secondActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(metadataInput);
+
+		modal.addComponents(firstActionRow, secondActionRow);
+
+		return await interaction.showModal(modal);
+
 	} catch (error) {
 		container.logger.error('Erreur lors du getRaw:', error);
-		return interactionRespond(interaction, "❌ Erreur lors de l'envoi du message raw. Vérifiez les permissions du bot.");
+		if (!interaction.replied && !interaction.deferred) {
+			return interaction.reply({ content: "❌ Erreur lors de l'affichage du message raw.", flags: [MessageFlags.Ephemeral] });
+		}
+		return interaction.reply({ content: "❌ Erreur lors de l'affichage du message raw.", flags: [MessageFlags.Ephemeral] });
 	}
 
 };
+
+// BROADCAST UPDATE RAW
+export const updateRawBroadcast = async (interaction: ModalSubmitInteraction) => {
+	console.log('==> updateRawBroadcast');
+	console.log(interaction);
+}
+
+// BROADCAST GET RAW
+export const getRawBroadcast = async (interaction: BroadcastInteraction) => {
+
+	const message = await verifyMessage(interaction, true, true);
+
+	const broadcastContainer = new ContainerBuilder()
+		.setAccentColor(15844367)
+		.setId(BroadcastVariables.ContainerId)
+		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# Metadata :'))
+		.addTextDisplayComponents(
+			new TextDisplayBuilder()
+				.setContent(`**Raw message from ${escapeMarkdown(message.author.tag)}** (<@${message.author.id}>)\n**Original:** ${message.url}\n**Creation date:** ${message.createdAt.toLocaleDateString()}`)
+				.setId(BroadcastVariables.LinkTextDisplayOptionId)
+		)
+		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
+		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# RAW Message :'))
+		.addTextDisplayComponents(
+			new TextDisplayBuilder()
+				.setContent(`\`\`\`json\n${protectBackticks(buildSimpleRawMessage(message))}\n\`\`\``)
+				.setId(BroadcastVariables.LinkTextDisplayRawId)
+		)
+
+	if (interaction instanceof ButtonInteraction) {
+		return interaction.update({ components: [broadcastContainer] });
+	}
+
+	return interaction.editReply({ components: [broadcastContainer] });
+}

@@ -16,9 +16,6 @@ export class Roles {
 	static readonly LEAD = '1432499495882457225';
 	static readonly SUB_LEAD = '1432499495882457224';
 
-	// Dump
-	static readonly DUMP = '1437787095060975638';
-
 	// Development
 	static readonly BOT = '1432499495882457223';
 	static readonly WEB = '1432499495882457222';

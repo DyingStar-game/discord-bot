@@ -1,4 +1,4 @@
-import { ButtonInteraction, ChannelSelectMenuInteraction, ChatInputCommandInteraction, ComponentType, escapeMarkdown, GuildMember, InteractionEditReplyOptions, InteractionUpdateOptions, Message, MessageFlags, TextDisplayBuilder } from 'discord.js';
+import { ButtonInteraction, ChannelSelectMenuInteraction, ChatInputCommandInteraction, ComponentType, GuildMember, InteractionEditReplyOptions, InteractionUpdateOptions, Message, MessageFlags, TextDisplayBuilder } from 'discord.js';
 import { BroadcastInteraction, BroadcastVariables } from '../../Services/broadcast.service';
 
 /**
@@ -97,74 +97,33 @@ export const verifyMessage = async (interaction: BroadcastInteraction, allowBot:
 }
 
 /**
- * Build new message with original RAW message and different metadata  
- * @param message 
- * @returns parts string[] - Different part of the return message
+ * Build simple raw message content for easy editing (includes attachments)
+ * @param message - The Discord message
+ * @returns Simple text content with attachments URLs
  */
-export const buildRawMessage = (message: Message): string => {
+export const buildSimpleRawMessage = (message: Message): string => {
 	const parts: string[] = [];
-
-	// === TEST CONTENT ===
+	
+	// Add message content
 	if (message.content) {
-		parts.push('**📝 Content:**');
-		parts.push('```');
-		// Échapper le markdown mais garder le texte brut lisible
-		parts.push(escapeMarkdown(message.content));
-		parts.push('```');
+		parts.push(message.content);
 	}
-
-	// === ATTACHMENTS ===
+	
+	// Add attachments as URLs at the end
 	if (message.attachments.size > 0) {
-		parts.push('\n**📎 Attachments:**');
-		message.attachments.forEach((att, index) => {
-			parts.push(`${index + 1}. ${att.name} - ${att.url}`);
+		if (parts.length > 0) parts.push('\n');
+		message.attachments.forEach((att) => {
+			parts.push(att.url);
 		});
 	}
-
-	// === EMBEDS ===
-	if (message.embeds.length > 0) {
-		parts.push('\n**📋 Embeds:**');
-		message.embeds.forEach((embed, index) => {
-			const embedInfo: any = {
-				type: embed.data.type || 'rich'
-			};
-
-			if (embed.data.title) embedInfo.title = embed.data.title;
-			if (embed.data.description) embedInfo.description = embed.data.description;
-			if (embed.data.url) embedInfo.url = embed.data.url;
-			if (embed.data.color) embedInfo.color = embed.data.color;
-			if (embed.data.footer?.text) embedInfo.footer = embed.data.footer.text;
-			if (embed.data.author?.name) embedInfo.author = embed.data.author.name;
-			if (embed.data.image?.url) embedInfo.image = embed.data.image.url;
-			if (embed.data.thumbnail?.url) embedInfo.thumbnail = embed.data.thumbnail.url;
-
-			parts.push(`**Embed ${index + 1}:**`);
-			parts.push('```json');
-			parts.push(JSON.stringify(embedInfo, null, 2));
-			parts.push('```');
-		});
-	}
-
-	// === STICKERS ===
-	if (message.stickers.size > 0) {
-		parts.push('\n**🎨 Stickers:**');
-		message.stickers.forEach((sticker) => {
-			parts.push(`- ${sticker.name} (ID: ${sticker.id})`);
-		});
-	}
-
-	// === METADATA ===
-	parts.push('\n**ℹ️ Metadata:**');
-	parts.push(`- Author: ${escapeMarkdown(message.author.tag)} (ID: ${message.author.id})`);
-	parts.push(`- Channel: <#${message.channelId}> (ID: ${message.channelId})`);
-	parts.push(`- Message ID: ${message.id}`);
-	parts.push(`- Created: <t:${Math.floor(message.createdTimestamp / 1000)}:F>`);
-	if (message.editedTimestamp) {
-		parts.push(`- Edited: <t:${Math.floor(message.editedTimestamp / 1000)}:F>`);
-	}
-
+	
 	return parts.join('\n');
 };
+
+export function protectBackticks(str: string): string {
+    // Ajoute un zéro-width space après chaque backtick pour empêcher l'interprétation
+    return str.replace(/`/g, '\u200B`');
+}
 
 /**
  * Response to interaction
