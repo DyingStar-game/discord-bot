@@ -113,7 +113,7 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 	if (!channel || !channel.isTextBased()) {
 		throw new UserError({
 			identifier: 'sendBroadcast',
-			message: 'Channel introuvable ou inaccessible ',
+			message: 'Channel not found or inaccessible',
 			context: { interaction, command: this }
 		});
 	}
@@ -123,21 +123,21 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 	if (!message)
 		throw new UserError({
 			identifier: 'sendBroadcast',
-			message: 'Message introuvable',
+			message: 'Message not found',
 			context: { interaction, command: this }
 		});
 
 	if (isBotMessage(message))
 		throw new UserError({
 			identifier: 'sendBroadcast',
-			message: 'Vous ne pouvez pas broadcast un message du bot',
+			message: 'You cannot broadcast a bot message',
 			context: { interaction, command: this }
 		});
 
 	if (!isMessageOwner(message, interactionMember))
 		throw new UserError({
 			identifier: 'sendBroadcast',
-			message: "Vous ne pouvez pas broadcast un message qui n'est pas votre",
+			message: 'You cannot broadcast a message that is not yours',
 			context: { interaction, command: this }
 		});
 
@@ -149,7 +149,7 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 		if (!targetChannel || !sendSelectChannelTypes.includes(targetChannel?.type as ApplicationCommandOptionAllowedChannelTypes)) {
 			throw new UserError({
 				identifier: 'sendBroadcast',
-				message: 'Impossible de broadcast le message vers le canal sélectionné',
+				message: 'Cannot broadcast message to selected channel',
 				context: { interaction, command: this }
 			});
 		}
@@ -159,7 +159,7 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 	if (!broadcastChannel || !('send' in broadcastChannel) || !('permissionsFor' in broadcastChannel) || !isTextBasedChannel(broadcastChannel)) {
 		throw new UserError({
 			identifier: 'sendBroadcast',
-			message: 'Channel de destination introuvable ou inaccessible',
+			message: 'Destination channel not found or inaccessible',
 			context: { interaction, command: this }
 		});
 	}
@@ -170,11 +170,11 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 			embeds: message.embeds,
 			files: message.attachments.map((att) => att.url)
 		});
-		return interactionRespond(interaction, '✅ Message broadcasté avec succès!');
+		return interactionRespond(interaction, '✅ Message broadcasted successfully!');
 	} catch (_) {
 		throw new ServiceException({
 			identifier: 'sendBroadcast',
-			message: "Erreur lors de l'envoi du message. Vérifiez les permissions du bot.",
+			message: 'Error sending message. Check bot permissions.',
 			context: { interaction, command: this }
 		});
 	}

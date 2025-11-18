@@ -53,7 +53,7 @@ down: ## Stop development environment
 	@echo "$(CYAN)🛑 Stopping development environment...$(RESET)"
 	@$(COMPOSE) down
 
-.PHONY:dev
+.PHONY: dev
 dev: ## Run the development environment
 	@echo "$(CYAN)📦 Running: pnpm watch:start$(RESET)"
 	@$(COMPOSE) exec $(DEV_SERVICE) sh -c "corepack enable && corepack install && pnpm watch:start"

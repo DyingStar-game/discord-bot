@@ -36,7 +36,7 @@ export class PingCommand extends Command {
 		await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 		throw new UserError({
 			identifier: interaction.commandName,
-			message: 'Lutilisateur nexiste pas',
+			message: 'Test error message',
 			context: { interaction, command: this }
 		});
 	}
@@ -44,7 +44,7 @@ export class PingCommand extends Command {
 	public override async contextMenuRun(interaction: Command.ContextMenuCommandInteraction) {
 		throw new ServiceException({
 			identifier: interaction.commandName,
-			message: 'Lutilisateur nexiste pas',
+			message: 'Test error message',
 			context: { interaction, command: this }
 		});
 	}
