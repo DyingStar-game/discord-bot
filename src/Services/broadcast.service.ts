@@ -51,6 +51,7 @@ export enum BroadcastVariables {
 	ModalUpdateRawId = 'broadcastUpdateRawModal',
 	LinkTextDisplayOptionId = 636074777,
 	LinkTextDisplayRawId = 636074778,
+	LinkErrorTextDisplayOptionId = 636074779,
 	ContainerId = 72184951,
 }
 
@@ -75,22 +76,22 @@ export const broadcastContainerBuilder = (channelId: string, messageId: string) 
 			)
 		)
 		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
-		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# Get raw content\nSend raw content of the message to dump channel :'))
-		.addActionRowComponents(
-			new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
-				new ButtonBuilder()
-				.setCustomId(`${BroadcastVariables.ButtonGetRawCustomId}`)
-				.setLabel("Get Raw")
-				.setStyle(ButtonStyle.Primary)
-			)
-		)
-		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
 		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# Update content\nUpdate content of the message :'))
 		.addActionRowComponents(
 			new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
 				new ButtonBuilder()
 				.setCustomId(`${BroadcastVariables.ButtonUpdateRawCustomId}`)
 				.setLabel("Update Raw")
+				.setStyle(ButtonStyle.Primary)
+			)
+		)
+		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
+		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# Get raw content\nSend raw content of the message to dump channel :'))
+		.addActionRowComponents(
+			new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+				new ButtonBuilder()
+				.setCustomId(`${BroadcastVariables.ButtonGetRawCustomId}`)
+				.setLabel("Get Raw")
 				.setStyle(ButtonStyle.Primary)
 			)
 		);
@@ -116,12 +117,12 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 	}
 
 	try {
-		await sendLongMessageAsync(broadcastChannel, {
+		const response = await sendLongMessageAsync(broadcastChannel, {
 			content: message.content,
 			embeds: message.embeds,
 			files: message.attachments.map((att) => att.url)
 		});
-		return interactionRespond(interaction, '✅ Message broadcasté avec succès!');
+		return interactionRespond(interaction, `✅ Message broadcasté avec succès! ${response?.url}`);
 	} catch (error) {
 		container.logger.error('Erreur lors du broadcast:', error);
 		return interactionRespond(interaction, "❌ Erreur lors de l'envoi du message. Vérifiez les permissions du bot.");
@@ -132,6 +133,11 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 export const updateRawBroadcastModal = async (interaction: BroadcastInteraction) => {
 
 	const message = await verifyMessage(interaction, true, true);
+
+	// Check if message is editable by the bot
+	if ((message.author.id !== interaction.client.user?.id) && interaction instanceof ButtonInteraction) {
+		return interaction.update({ components: [buildErrorModalMessage()] });
+	}
 	
 	try {
 		// Get editable raw message (JSON format for precise control)
@@ -305,4 +311,16 @@ export const getRawBroadcast = async (interaction: BroadcastInteraction) => {
 	}
 
 	return interaction.editReply({ components: [broadcastContainer] });
+}
+
+export const buildErrorModalMessage = () => {
+	return new ContainerBuilder()
+		.setAccentColor(15844367)
+		.setId(BroadcastVariables.ContainerId)
+		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# Error :'))
+		.addTextDisplayComponents(
+			new TextDisplayBuilder()
+				.setContent(`❌ Le bot ne peut modifier que ses propres messages.`)
+				.setId(BroadcastVariables.LinkErrorTextDisplayOptionId)
+		)
 }

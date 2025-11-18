@@ -11,7 +11,7 @@ import { BroadcastVariables, updateRawBroadcastModal } from '../../Services/broa
 export class BroadcastUpdateRawButtonInteractionHandler extends InteractionHandler {
 	public override parse(interaction: ButtonInteraction) {
 		if (interaction.customId !== BroadcastVariables.ButtonUpdateRawCustomId) return this.none();
-        console.log(interaction.message.components);
+        
 		return this.some();
 	}
 	public override async run(interaction: ButtonInteraction) {
