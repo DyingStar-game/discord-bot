@@ -25,7 +25,14 @@ import {
 	TextInputStyle
 } from 'discord.js';
 import { sendLongMessageAsync } from '../utils/methods/channelMethods';
-import { buildSimpleRawMessage, interactionRespond, protectBackticks, verifyMessage } from '../utils/methods/messageMethods';
+import { 
+	buildCopyableRawMessage,
+	buildEditableRawMessage,
+	interactionRespond, 
+	protectBackticks, 
+	verifyMessage, 
+	parseRawMessage
+} from '../utils/methods/messageMethods';
 
 export type BroadcastInteraction = ChatInputCommandInteraction | ChannelSelectMenuInteraction | ButtonInteraction | ContextMenuCommandInteraction;
 
@@ -127,55 +134,154 @@ export const updateRawBroadcastModal = async (interaction: BroadcastInteraction)
 	const message = await verifyMessage(interaction, true, true);
 	
 	try {
-		// Get simple raw content with attachments
-		const rawContent = buildSimpleRawMessage(message);
+		// Get editable raw message (JSON format for precise control)
+		const editableRaw = buildEditableRawMessage(message);
 
-		// Create modal with raw content
+		// Create modal with 4 fields: content, embeds (JSON), attachments, and message URL
 		const modal = new ModalBuilder()
 			.setCustomId(BroadcastVariables.ModalUpdateRawId)
-			.setTitle('Raw Message Content');
+			.setTitle('Edit Message');
 
-		const rawContentInput = new TextInputBuilder()
-			.setCustomId('rawContentField')
+		// Field 1: Message content
+		const contentInput = new TextInputBuilder()
+			.setCustomId('contentField')
 			.setLabel('Message Content')
 			.setStyle(TextInputStyle.Paragraph)
-			.setValue(rawContent)
-			.setRequired(true);
-
-		const metadataInput = new TextInputBuilder()
-			.setCustomId('metadataField')
-			.setLabel('Metadata (Read-only)')
-			.setStyle(TextInputStyle.Paragraph)
-			.setValue(`Original: ${message.url}\nAuthor: ${message.author.tag}\nMessage ID: ${message.id}`)
+			.setValue(editableRaw.content)
 			.setRequired(false);
 
-		const firstActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(rawContentInput);
-		const secondActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(metadataInput);
+		// Field 2: Embeds (JSON format for full control)
+		const embedsInput = new TextInputBuilder()
+			.setCustomId('embedsField')
+			.setLabel('Embeds (JSON format)')
+			.setStyle(TextInputStyle.Paragraph)
+			.setValue(editableRaw.embedsJson)
+			.setRequired(false)
+			.setPlaceholder('[{"title": "Title", "description": "Text", "color": 5814783}]');
 
-		modal.addComponents(firstActionRow, secondActionRow);
+		// Field 3: Attachments (URLs, one per line)
+		const attachmentsInput = new TextInputBuilder()
+			.setCustomId('attachmentsField')
+			.setLabel('Attachments (URLs, one per line)')
+			.setStyle(TextInputStyle.Paragraph)
+			.setValue(editableRaw.attachments)
+			.setRequired(false)
+			.setPlaceholder('https://cdn.discordapp.com/attachments/...');
+
+		// Field 4: Message URL (reference field - DO NOT MODIFY)
+		const messageUrlInput = new TextInputBuilder()
+			.setCustomId('messageUrlField')
+			.setLabel('Message URL (DO NOT MODIFY)')
+			.setStyle(TextInputStyle.Short)
+			.setValue(message.url)
+			.setRequired(true);
+
+		const row1 = new ActionRowBuilder<TextInputBuilder>().addComponents(contentInput);
+		const row2 = new ActionRowBuilder<TextInputBuilder>().addComponents(embedsInput);
+		const row3 = new ActionRowBuilder<TextInputBuilder>().addComponents(attachmentsInput);
+		const row4 = new ActionRowBuilder<TextInputBuilder>().addComponents(messageUrlInput);
+
+		modal.addComponents(row1, row2, row3, row4);
 
 		return await interaction.showModal(modal);
 
 	} catch (error) {
-		container.logger.error('Erreur lors du getRaw:', error);
+		container.logger.error('Erreur lors de l\'ouverture de la modale:', error);
 		if (!interaction.replied && !interaction.deferred) {
-			return interaction.reply({ content: "❌ Erreur lors de l'affichage du message raw.", flags: [MessageFlags.Ephemeral] });
+			return interaction.reply({ content: "❌ Erreur lors de l'affichage de la modale.", flags: [MessageFlags.Ephemeral] });
 		}
-		return interaction.reply({ content: "❌ Erreur lors de l'affichage du message raw.", flags: [MessageFlags.Ephemeral] });
+		return interaction.editReply({ content: "❌ Erreur lors de l'affichage de la modale." });
 	}
 
 };
 
 // BROADCAST UPDATE RAW
 export const updateRawBroadcast = async (interaction: ModalSubmitInteraction) => {
-	console.log('==> updateRawBroadcast');
-	console.log(interaction);
-}
+	try {
+		await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+		// Extract message URL from the hidden field
+		const messageUrl = interaction.fields.getTextInputValue('messageUrlField');
+
+		// Parse Discord link: https://discord.com/channels/{guildId}/{channelId}/{messageId}
+		const urlRegex = /^https?:\/\/(?:ptb\.|canary\.)?discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
+		const match = messageUrl.match(urlRegex);
+
+		if (!match) {
+			return interaction.editReply({ content: '❌ URL du message invalide.' });
+		}
+
+		const [_, _guildId, channelId, messageId] = match;
+
+		// Fetch the channel
+		const channel = await interaction.client.channels.fetch(channelId);
+		if (!channel || !channel.isTextBased()) {
+			return interaction.editReply({ content: '❌ Channel introuvable ou inaccessible.' });
+		}
+
+		// Fetch the message to update
+		const messageToUpdate = await channel.messages.fetch(messageId);
+		if (!messageToUpdate) {
+			return interaction.editReply({ content: '❌ Message introuvable.' });
+		}
+
+		// Check if message is editable by the bot
+		if (messageToUpdate.author.id !== interaction.client.user?.id) {
+			return interaction.editReply({ content: '❌ Le bot ne peut modifier que ses propres messages.' });
+		}
+
+		// Get fields from modal
+		const contentField = interaction.fields.getTextInputValue('contentField');
+		const embedsField = interaction.fields.getTextInputValue('embedsField');
+		const attachmentsField = interaction.fields.getTextInputValue('attachmentsField');
+
+		// Parse the fields
+		let parsedMessage;
+		try {
+			parsedMessage = parseRawMessage(contentField, embedsField, attachmentsField);
+		} catch (error) {
+			return interaction.editReply({ 
+				content: `❌ Erreur de parsing: ${error instanceof Error ? error.message : 'Format invalide'}` 
+			});
+		}
+
+		// Validate at least one field is present
+		if (!parsedMessage.content && parsedMessage.embeds.length === 0 && parsedMessage.attachments.length === 0) {
+			return interaction.editReply({ content: '❌ Le message doit contenir au moins du contenu, un embed ou un attachement.' });
+		}
+
+		// Update the message
+		await messageToUpdate.edit({
+			content: parsedMessage.content || null,
+			embeds: parsedMessage.embeds,
+			files: parsedMessage.attachments
+		});
+
+		return interaction.editReply({ 
+			content: `✅ Message mis à jour avec succès!\n**Lien:** ${messageUrl}` 
+		});
+
+	} catch (error) {
+		container.logger.error('Erreur lors de l\'update du message:', error);
+		
+		if (!interaction.replied && !interaction.deferred) {
+			return interaction.reply({ 
+				content: '❌ Erreur lors de la mise à jour du message.', 
+				flags: [MessageFlags.Ephemeral] 
+			});
+		}
+		
+		return interaction.editReply({ content: '❌ Erreur lors de la mise à jour du message.' });
+	}
+};
 
 // BROADCAST GET RAW
 export const getRawBroadcast = async (interaction: BroadcastInteraction) => {
 
 	const message = await verifyMessage(interaction, true, true);
+
+	// Build copyable raw representation (Markdown for embeds, easy to copy/paste)
+	const rawContent = buildCopyableRawMessage(message);
 
 	const broadcastContainer = new ContainerBuilder()
 		.setAccentColor(15844367)
@@ -187,10 +293,10 @@ export const getRawBroadcast = async (interaction: BroadcastInteraction) => {
 				.setId(BroadcastVariables.LinkTextDisplayOptionId)
 		)
 		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
-		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# RAW Message :'))
+		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# RAW Message (Copyable) :'))
 		.addTextDisplayComponents(
 			new TextDisplayBuilder()
-				.setContent(`\`\`\`json\n${protectBackticks(buildSimpleRawMessage(message))}\n\`\`\``)
+				.setContent(`\`\`\`\n${protectBackticks(rawContent)}\n\`\`\``)
 				.setId(BroadcastVariables.LinkTextDisplayRawId)
 		)
 
