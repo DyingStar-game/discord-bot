@@ -1,6 +1,7 @@
 import { ApplyOptions } from '@sapphire/decorators';
 import { Command, UserError } from '@sapphire/framework';
-import { ApplicationCommandType, ApplicationIntegrationType, InteractionContextType } from 'discord.js';
+import { ApplicationCommandType, ApplicationIntegrationType, InteractionContextType, MessageFlags } from 'discord.js';
+import { ServiceException } from '../../lib/Error/class/serviceException';
 
 @ApplyOptions<Command.Options>({
 	name: 'ping',
@@ -29,35 +30,22 @@ export class PingCommand extends Command {
 			integrationTypes,
 			contexts
 		});
-
-		registry.registerContextMenuCommand({
-			name: this.name,
-			type: ApplicationCommandType.User,
-			integrationTypes,
-			contexts
-		});
 	}
 
 	public override async chatInputRun(interaction: Command.ChatInputCommandInteraction) {
-		const msg = await interaction.reply({ content: 'Ping?' });
-
-		const content = `Pong! Bot Latency ${Math.round(this.container.client.ws.ping)}ms. API Latency ${
-			msg.createdTimestamp - interaction.createdTimestamp
-		}ms.`;
-
-		return interaction.editReply({ content });
+		await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+		throw new UserError({
+			identifier: interaction.commandName,
+			message: 'Test error message',
+			context: { interaction, command: this }
+		});
 	}
 
 	public override async contextMenuRun(interaction: Command.ContextMenuCommandInteraction) {
-		this;
-		throw new UserError({ identifier: 'ping_error', message: 'Ping error', context: { silent: true, interaction } });
-
-		// const msg = await interaction.reply({ content: 'Ping?' });
-
-		// const content = `Pong! Bot Latency ${Math.round(this.container.client.ws.ping)}ms. API Latency ${
-		// 	msg.createdTimestamp - interaction.createdTimestamp
-		// }ms.`;
-
-		// return interaction.editReply({ content });
+		throw new ServiceException({
+			identifier: interaction.commandName,
+			message: 'Test error message',
+			context: { interaction, command: this }
+		});
 	}
 }

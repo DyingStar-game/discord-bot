@@ -1,21 +1,21 @@
 import './lib/setup';
 
-import { LogLevel, SapphireClient } from '@sapphire/framework';
+import { container, LogLevel, SapphireClient } from '@sapphire/framework';
 import { GatewayIntentBits, Partials } from 'discord.js';
+import { ErrorHandler } from './lib/Error/errorHandler';
+import { LogHandler } from './lib/logging/logHandler';
 
 const client = new SapphireClient({
-	defaultPrefix: '!',
-	regexPrefix: /^(hey +)?bot[,! ]/i,
-	caseInsensitiveCommands: true,
 	logger: {
 		level: LogLevel.Debug
 	},
+	loadDefaultErrorListeners: false,
 	shards: 'auto',
 	intents: [
 		GatewayIntentBits.DirectMessageReactions,
 		GatewayIntentBits.DirectMessages,
 		GatewayIntentBits.GuildModeration,
-		GatewayIntentBits.GuildEmojisAndStickers,
+		GatewayIntentBits.GuildExpressions,
 		GatewayIntentBits.GuildMembers,
 		GatewayIntentBits.GuildMessageReactions,
 		GatewayIntentBits.GuildMessages,
@@ -23,9 +23,20 @@ const client = new SapphireClient({
 		GatewayIntentBits.GuildVoiceStates,
 		GatewayIntentBits.MessageContent
 	],
-	partials: [Partials.Channel],
-	loadMessageCommandListeners: true
+	partials: [Partials.Channel]
 });
+
+container.logHandler = new LogHandler(client);
+client.logHandler = container.logHandler;
+
+container.errorHandler = new ErrorHandler(client);
+client.errorHandler = container.errorHandler;
+client.errorHandler.registerProcessListeners();
+
+container.guildId = process.env.GUILD_ID ?? undefined;
+if (!container.guildId) {
+	throw new Error('GUILD_ID is not set');
+}
 
 const main = async () => {
 	try {
@@ -40,3 +51,9 @@ const main = async () => {
 };
 
 void main();
+
+declare module '@sapphire/pieces' {
+	interface Container {
+		guildId: string | undefined;
+	}
+}

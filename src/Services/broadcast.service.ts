@@ -1,5 +1,5 @@
 import { isTextBasedChannel } from '@sapphire/discord.js-utilities';
-import { container } from '@sapphire/framework';
+import { container, UserError } from '@sapphire/framework';
 import { envParseString } from '@skyra/env-utilities';
 import {
 	ActionRowBuilder,
@@ -19,8 +19,9 @@ import {
 	SeparatorSpacingSize,
 	TextDisplayBuilder
 } from 'discord.js';
-import { sendLongMessageAsync } from '../utils/methods/channelMethods';
-import { isBotMessage, isMessageOwner } from '../utils/methods/messageMethods';
+import { ServiceException } from '../lib/Error/class/serviceException';
+import { sendLongMessageAsync } from '../utils/helper/channelHelper';
+import { isBotMessage, isMessageOwner } from '../utils/helper/messageHelper';
 
 export type BroadcastInteraction = ChatInputCommandInteraction | ChannelSelectMenuInteraction;
 
@@ -65,18 +66,31 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 
 	const interactionMember =
 		interaction.member instanceof GuildMember ? interaction.member : await interaction.guild?.members.fetch(interaction.user.id);
-	if (!interactionMember) {
-		return interactionRespond(interaction, '❌ Member not found');
-	}
+	if (!interactionMember)
+		throw new ServiceException({
+			identifier: 'sendBroadcast',
+			message: '❌ Interaction member not found',
+			context: { interaction, command: this }
+		});
 
 	let link = interaction instanceof ChatInputCommandInteraction ? interaction.options.getString('link', true) : '';
 
 	if (interaction instanceof ChannelSelectMenuInteraction) {
 		const broadcastContainer = interaction.message.components.find((c) => c.id === BroadcastVariables.ContainerId);
-		if (!broadcastContainer || broadcastContainer.type !== ComponentType.Container) throw new Error('Broadcast container not found');
+		if (!broadcastContainer || broadcastContainer.type !== ComponentType.Container)
+			throw new ServiceException({
+				identifier: 'sendBroadcast',
+				message: '❌ Broadcast container not found',
+				context: { interaction, command: this }
+			});
 
 		const textDisplayComponent = broadcastContainer?.components.find((c) => c.id === BroadcastVariables.LinkTextDisplayOptionId);
-		if (!textDisplayComponent || textDisplayComponent.type !== ComponentType.TextDisplay) throw new Error('Text display component not found');
+		if (!textDisplayComponent || textDisplayComponent.type !== ComponentType.TextDisplay)
+			throw new ServiceException({
+				identifier: 'sendBroadcast',
+				message: '❌ Text display component not found',
+				context: { interaction, command: this }
+			});
 
 		link = textDisplayComponent.content;
 	}
@@ -85,30 +99,47 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 	const urlRegex = /^https?:\/\/(?:ptb\.|canary\.)?discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
 	const match = link.match(urlRegex);
 
-	if (!match) {
-		return interactionRespond(interaction, '❌ Lien invalide. Format attendu: https://discord.com/channels/{guildId}/{channelId}/{messageId}');
-	}
+	if (!match)
+		throw new UserError({
+			identifier: 'sendBroadcast',
+			message: 'Lien invalide. Format attendu: https://discord.com/channels/{guildId}/{channelId}/{messageId}',
+			context: { interaction, command: this }
+		});
 
 	const [_, _guildId, channelId, messageId] = match;
 
 	// Fetch source channel
 	const channel = await interaction.client.channels.fetch(channelId);
 	if (!channel || !channel.isTextBased()) {
-		return interactionRespond(interaction, '❌ Channel introuvable ou inaccessible ');
+		throw new UserError({
+			identifier: 'sendBroadcast',
+			message: 'Channel not found or inaccessible',
+			context: { interaction, command: this }
+		});
 	}
 
 	// Fetch source message
 	const message = await channel.messages.fetch(messageId);
-	if (!message) {
-		return interactionRespond(interaction, '❌ Message introuvable');
-	}
+	if (!message)
+		throw new UserError({
+			identifier: 'sendBroadcast',
+			message: 'Message not found',
+			context: { interaction, command: this }
+		});
 
-	if (isBotMessage(message)) {
-		return interactionRespond(interaction, '❌ Vous ne pouvez pas broadcast un message du bot');
-	}
+	if (isBotMessage(message))
+		throw new UserError({
+			identifier: 'sendBroadcast',
+			message: 'You cannot broadcast a bot message',
+			context: { interaction, command: this }
+		});
 
 	if (!isMessageOwner(message, interactionMember))
-		return interactionRespond(interaction, "❌ Vous ne pouvez pas broadcast un message qui n'est pas votre");
+		throw new UserError({
+			identifier: 'sendBroadcast',
+			message: 'You cannot broadcast a message that is not yours',
+			context: { interaction, command: this }
+		});
 
 	// Get target channel
 	let broadcastChannel = interaction.isChatInputCommand() ? interaction.options.getChannel('channel', true) : interaction.channel;
@@ -116,13 +147,21 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 	if (interaction instanceof ChannelSelectMenuInteraction) {
 		const targetChannel = container.client.channels.cache.get(interaction.values[0]);
 		if (!targetChannel || !sendSelectChannelTypes.includes(targetChannel?.type as ApplicationCommandOptionAllowedChannelTypes)) {
-			return interactionRespond(interaction, '❌ Impossible de broadcast le message vers le canal sélectionné');
+			throw new UserError({
+				identifier: 'sendBroadcast',
+				message: 'Cannot broadcast message to selected channel',
+				context: { interaction, command: this }
+			});
 		}
 		broadcastChannel = targetChannel;
 	}
 
 	if (!broadcastChannel || !('send' in broadcastChannel) || !('permissionsFor' in broadcastChannel) || !isTextBasedChannel(broadcastChannel)) {
-		return interactionRespond(interaction, '❌ Channel de destination introuvable ou inaccessible');
+		throw new UserError({
+			identifier: 'sendBroadcast',
+			message: 'Destination channel not found or inaccessible',
+			context: { interaction, command: this }
+		});
 	}
 
 	try {
@@ -131,10 +170,13 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 			embeds: message.embeds,
 			files: message.attachments.map((att) => att.url)
 		});
-		return interactionRespond(interaction, '✅ Message broadcasté avec succès!');
-	} catch (error) {
-		container.logger.error('Erreur lors du broadcast:', error);
-		return interactionRespond(interaction, "❌ Erreur lors de l'envoi du message. Vérifiez les permissions du bot.");
+		return interactionRespond(interaction, '✅ Message broadcasted successfully!');
+	} catch (_) {
+		throw new ServiceException({
+			identifier: 'sendBroadcast',
+			message: 'Error sending message. Check bot permissions.',
+			context: { interaction, command: this }
+		});
 	}
 };
 

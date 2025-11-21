@@ -1,5 +1,7 @@
+import { container } from '@sapphire/framework';
 import {
 	GuildMemberResolvable,
+	GuildTextBasedChannel,
 	MessageCreateOptions,
 	NewsChannel,
 	PermissionFlagsBits,
@@ -8,7 +10,7 @@ import {
 	ThreadChannel,
 	VoiceChannel
 } from 'discord.js';
-import { splitIntoChunks } from './stringMethods';
+import { splitIntoChunks } from './stringHelper';
 
 /**
  * Send a long message to a channel
@@ -74,4 +76,49 @@ export const hasRequiredPermissionsInChannel = async (
 		})
 		.join(', ');
 	return [false, permissionNames];
+};
+
+/**
+ * Resolve the log channel
+ * @returns The log channel or undefined if the log channel is not found
+ */
+export const resolveLogChannel = async (): Promise<GuildTextBasedChannel | undefined> => {
+	if (!container.logChannel.channelId) container.logChannel.channelId = process.env.LOG_CHANNEL_ID ?? undefined;
+
+	if (container.logChannel.channel?.isSendable()) return container.logChannel.channel;
+
+	if (!container.logChannel.channelId) {
+		if (!container.logChannel.fetchFailed) {
+			container.client.logger.error('Aucun salon de log configuré (LOG_CHANNEL_ID).');
+			container.logChannel.fetchFailed = true;
+		}
+		return undefined;
+	}
+
+	try {
+		const channel = await container.client.channels.fetch(container.logChannel.channelId);
+
+		if (!channel || !channel.isTextBased() || channel.isDMBased()) {
+			if (!container.logChannel.fetchFailed) {
+				container.client.logger.warn(`Le salon configuré (${container.logChannel.channelId}) n'est pas un salon textuel de serveur.`);
+				container.logChannel.fetchFailed = true;
+			}
+			return undefined;
+		}
+
+		container.logChannel.channel = channel;
+		container.logChannel.fetchFailed = false;
+
+		return channel;
+	} catch (error) {
+		if (!container.logChannel.fetchFailed) {
+			container.client.logger.error('Impossible de récupérer le salon de log', error);
+			container.logChannel.fetchFailed = true;
+		}
+		return undefined;
+	}
+};
+
+export const buildChannelUrl = (channelId?: string): string => {
+	return `https://discord.com/channels/${container.guildId}/${channelId}`;
 };
