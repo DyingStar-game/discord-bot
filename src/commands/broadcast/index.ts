@@ -3,8 +3,8 @@ import { Command } from '@sapphire/framework';
 import { Subcommand } from '@sapphire/plugin-subcommands';
 import { ApplicationCommandType, ApplicationIntegrationType, ContextMenuCommandInteraction, InteractionContextType, MessageFlags } from 'discord.js';
 import { broadcastContainerBuilder, getRawBroadcast, sendBroadcast, sendSelectChannelTypes, updateRawBroadcastModal } from '../../Services/broadcast.service';
-import '../../utils/methods/channelMethods';
-import '../../utils/methods/stringMethods';
+import '../../utils/helper/channelHelper';
+import '../../utils/helper/stringHelper';
 
 @ApplyOptions<Subcommand.Options>({
 	name: 'broadcast',

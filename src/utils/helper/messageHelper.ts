@@ -1,5 +1,7 @@
 import { ButtonInteraction, ChannelSelectMenuInteraction, ChatInputCommandInteraction, ComponentType, GuildMember, InteractionEditReplyOptions, InteractionUpdateOptions, Message, MessageFlags, TextDisplayBuilder, EmbedBuilder, APIEmbed } from 'discord.js';
 import { BroadcastInteraction, BroadcastVariables } from '../../Services/broadcast.service';
+import { ServiceException } from '../../lib/Error/class/serviceException';
+import { UserError } from '@sapphire/framework';
 
 /**
  * Check if a message is a bot message
@@ -36,26 +38,37 @@ export const isMessageOwner = (message: Message, member: GuildMember) => {
  * @param allowUnpersonnal - Allow messages from other users
  * @returns Message<boolean> - Message to work with
  */
-export const verifyMessage = async (interaction: BroadcastInteraction, allowBot: boolean, allowUnpersonnal: boolean) => {
+export const verifyMessage = async (interaction: BroadcastInteraction, allowBot: boolean, allowUnpersonnal: boolean, method: string) => {
 	if (interaction instanceof ChatInputCommandInteraction && !interaction.deferred && !interaction.replied)
 		await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
 	const interactionMember =
 		interaction.member instanceof GuildMember ? interaction.member : await interaction.guild?.members.fetch(interaction.user.id);
-	if (!interactionMember) {
-		interactionRespond(interaction, '❌ Member not found');
-		throw new Error('❌ Broadcast: Member not found');
-	}
+	if (!interactionMember)
+		throw new ServiceException({
+			identifier: method,
+			message: '❌ Interaction member not found',
+			context: { interaction, command: this }
+		});
+
 
 	let link = interaction instanceof ChatInputCommandInteraction ? interaction.options.getString('link', true) : '';
 
 	if (interaction instanceof ChannelSelectMenuInteraction || interaction instanceof ButtonInteraction) {
 		const broadcastContainer = interaction.message.components.find((c) => c.id === BroadcastVariables.ContainerId);
-		if (!broadcastContainer || broadcastContainer.type !== ComponentType.Container) throw new Error('Broadcast container not found');
-
+		if (!broadcastContainer || broadcastContainer.type !== ComponentType.Container)
+			throw new ServiceException({
+				identifier: method,
+				message: '❌ Broadcast container not found',
+				context: { interaction, command: this }
+			});
 		const textDisplayComponent = broadcastContainer?.components.find((c) => c.id === BroadcastVariables.LinkTextDisplayOptionId);
-		if (!textDisplayComponent || textDisplayComponent.type !== ComponentType.TextDisplay) throw new Error('Text display component not found');
-
+		if (!textDisplayComponent || textDisplayComponent.type !== ComponentType.TextDisplay)
+			throw new ServiceException({
+				identifier: method,
+				message: '❌ Broadcast container not found',
+				context: { interaction, command: this }
+			});
 		link = textDisplayComponent.content;
 	}
 
@@ -63,35 +76,48 @@ export const verifyMessage = async (interaction: BroadcastInteraction, allowBot:
 	const urlRegex = /^https?:\/\/(?:ptb\.|canary\.)?discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
 	const match = link.match(urlRegex);
 
-	if (!match) {
-		interactionRespond(interaction, '❌ Lien invalide. Format attendu: https://discord.com/channels/{guildId}/{channelId}/{messageId}');
-		throw new Error('❌ Broadcast: Lien invalide. Format attendu: https://discord.com/channels/{guildId}/{channelId}/{messageId}');
-	}
+	if (!match)
+		throw new UserError({
+			identifier: method,
+			message: 'Lien invalide. Format attendu: https://discord.com/channels/{guildId}/{channelId}/{messageId}',
+			context: { interaction, command: this }
+		});
 
 	const [_, _guildId, channelId, messageId] = match;
 
 	// Fetch source channel
 	const channel = await interaction.client.channels.fetch(channelId);
 	if (!channel || !channel.isTextBased()) {
-		interactionRespond(interaction, '❌ Channel introuvable ou inaccessible');
-		throw new Error('❌ Broadcast: Channel introuvable ou inaccessible');
+		throw new UserError({
+			identifier: method,
+			message: 'Channel not found or inaccessible',
+			context: { interaction, command: this }
+		});
 	}
 
 	// Fetch source message
 	const message = await channel.messages.fetch(messageId);
-	if (!message) {
-		interactionRespond(interaction, '❌ Message introuvable');
-		throw new Error('❌ Broadcast: Message introuvable');
-	}
+	if (!message)
+		throw new UserError({
+			identifier: method,
+			message: 'Message not found',
+			context: { interaction, command: this }
+		});
 
 	if (!allowBot && isBotMessage(message)) {
-		interactionRespond(interaction, '❌ Vous ne pouvez pas broadcast un message du bot');
-		throw new Error('❌ Broadcast: Vous ne pouvez pas broadcast un message du bot');
+		throw new UserError({
+			identifier: method,
+			message: 'You cannot broadcast a bot message',
+			context: { interaction, command: this }
+		});
 	}
 
 	if (!allowUnpersonnal && !isMessageOwner(message, interactionMember)) {
-		interactionRespond(interaction, "❌ Vous ne pouvez pas broadcast un message qui n'est pas votre");
-		throw new Error('❌ Broadcast: Vous ne pouvez pas broadcast un message qui n\'est pas votre');
+		throw new UserError({
+			identifier: method,
+			message: 'You cannot broadcast a message that is not yours',
+			context: { interaction, command: this }
+		});
 	}
 	
 	return message;

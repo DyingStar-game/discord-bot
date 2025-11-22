@@ -1,5 +1,5 @@
 import { isTextBasedChannel } from '@sapphire/discord.js-utilities';
-import { container } from '@sapphire/framework';
+import { container, UserError } from '@sapphire/framework';
 import { envParseString } from '@skyra/env-utilities';
 import {
 	ActionRowBuilder,
@@ -24,7 +24,6 @@ import {
 	TextInputBuilder,
 	TextInputStyle
 } from 'discord.js';
-import { sendLongMessageAsync } from '../utils/methods/channelMethods';
 import { 
 	buildCopyableRawMessage,
 	buildEditableRawMessage,
@@ -32,7 +31,9 @@ import {
 	protectBackticks, 
 	verifyMessage, 
 	parseRawMessage
-} from '../utils/methods/messageMethods';
+} from '../utils/helper/messageHelper';
+import { ServiceException } from '../lib/Error/class/serviceException';
+import { sendLongMessageAsync } from '../utils/helper/channelHelper';
 
 export type BroadcastInteraction = ChatInputCommandInteraction | ChannelSelectMenuInteraction | ButtonInteraction | ContextMenuCommandInteraction;
 
@@ -44,6 +45,9 @@ export const sendSelectChannelTypes: ApplicationCommandOptionAllowedChannelTypes
 	ChannelType.PrivateThread
 ];
 
+/**
+ * List of components ID
+ */
 export enum BroadcastVariables {
 	ChannelSelectCustomId = 'broadcastSendChannelSelect',
 	ButtonGetRawCustomId = 'broadcastGetRawButton',
@@ -55,6 +59,15 @@ export enum BroadcastVariables {
 	ContainerId = 72184951,
 }
 
+// Storage Map for pending button interaction
+const pendingButtonInteractions = new Map<string, ButtonInteraction>();
+
+/**
+ * Build Boradcast Component V2
+ * @param channelId 
+ * @param messageId 
+ * @returns Component V2
+ */
 export const broadcastContainerBuilder = (channelId: string, messageId: string) =>
 	new ContainerBuilder()
 		.setAccentColor(15844367)
@@ -96,10 +109,14 @@ export const broadcastContainerBuilder = (channelId: string, messageId: string) 
 			)
 		);
 
-// BROADCAST SEND
+/**
+ * Send target message to specify channel
+ * @param interaction 
+ * @returns Message<boolean>
+ */
 export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 	
-	const message = await verifyMessage(interaction, false, false);
+	const message = await verifyMessage(interaction, false, false, 'sendBroadcast');
 
 	// Get target channel
 	let broadcastChannel = interaction.isChatInputCommand() ? interaction.options.getChannel('channel', true) : interaction.channel;
@@ -107,13 +124,21 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 	if (interaction instanceof ChannelSelectMenuInteraction) {
 		const targetChannel = container.client.channels.cache.get(interaction.values[0]);
 		if (!targetChannel || !sendSelectChannelTypes.includes(targetChannel?.type as ApplicationCommandOptionAllowedChannelTypes)) {
-			return interactionRespond(interaction, '❌ Impossible de broadcast le message vers le canal sélectionné');
+			throw new UserError({
+				identifier: 'sendBroadcast',
+				message: 'Cannot broadcast message to selected channel',
+				context: { interaction, command: this }
+			});
 		}
 		broadcastChannel = targetChannel;
 	}
 
 	if (!broadcastChannel || !('send' in broadcastChannel) || !('permissionsFor' in broadcastChannel) || !isTextBasedChannel(broadcastChannel)) {
-		return interactionRespond(interaction, '❌ Channel de destination introuvable ou inaccessible');
+		throw new UserError({
+			identifier: 'sendBroadcast',
+			message: 'Destination channel not found or inaccessible',
+			context: { interaction, command: this }
+		});
 	}
 
 	try {
@@ -122,17 +147,24 @@ export const sendBroadcast = async (interaction: BroadcastInteraction) => {
 			embeds: message.embeds,
 			files: message.attachments.map((att) => att.url)
 		});
-		return interactionRespond(interaction, `✅ Message broadcasté avec succès! ${response?.url}`);
-	} catch (error) {
-		container.logger.error('Erreur lors du broadcast:', error);
-		return interactionRespond(interaction, "❌ Erreur lors de l'envoi du message. Vérifiez les permissions du bot.");
+		return interactionRespond(interaction, `✅ Message broadcasted successfully ! ${response?.url}`);
+	} catch (_) {
+		throw new ServiceException({
+			identifier: 'sendBroadcast',
+			message: 'Error sending message. Check bot permissions.',
+			context: { interaction, command: this }
+		});
 	}
 };
 
-// BROADCAST UPDATE RAW MODAL
+/**
+ * Build update raw message modal
+ * @param interaction 
+ * @returns Modal
+ */
 export const updateRawBroadcastModal = async (interaction: BroadcastInteraction) => {
 
-	const message = await verifyMessage(interaction, true, true);
+	const message = await verifyMessage(interaction, true, true, 'updateRawBroadcastModal');
 
 	// Check if message is editable by the bot
 	if ((message.author.id !== interaction.client.user?.id) && interaction instanceof ButtonInteraction) {
@@ -143,7 +175,18 @@ export const updateRawBroadcastModal = async (interaction: BroadcastInteraction)
 		// Get editable raw message (JSON format for precise control)
 		const editableRaw = buildEditableRawMessage(message);
 
-		// Create modal with 4 fields: content, embeds (JSON), attachments, and message URL
+		// Store button interaction for later update
+		if (interaction instanceof ButtonInteraction) {
+			const uniqueKey = `${interaction.user.id}-${Date.now()}`;
+			pendingButtonInteractions.set(uniqueKey, interaction);
+			
+			// Clean up after 15 minutes
+			setTimeout(() => {
+				pendingButtonInteractions.delete(uniqueKey);
+			}, 15 * 60 * 1000);
+		}
+
+		// Create modal with 5 fields: content, embeds (JSON), attachments, message URL, and interaction key
 		const modal = new ModalBuilder()
 			.setCustomId(BroadcastVariables.ModalUpdateRawId)
 			.setTitle('Edit Message');
@@ -182,28 +225,59 @@ export const updateRawBroadcastModal = async (interaction: BroadcastInteraction)
 			.setValue(message.url)
 			.setRequired(true);
 
+		// Field 5: Interaction key (hidden - DO NOT MODIFY)
+		const interactionKeyInput = new TextInputBuilder()
+			.setCustomId('interactionKeyField')
+			.setLabel('Key (DO NOT MODIFY)')
+			.setStyle(TextInputStyle.Short)
+			.setValue(interaction instanceof ButtonInteraction ? `${interaction.user.id}-${Date.now()}` : '')
+			.setRequired(false);
+
 		const row1 = new ActionRowBuilder<TextInputBuilder>().addComponents(contentInput);
 		const row2 = new ActionRowBuilder<TextInputBuilder>().addComponents(embedsInput);
 		const row3 = new ActionRowBuilder<TextInputBuilder>().addComponents(attachmentsInput);
 		const row4 = new ActionRowBuilder<TextInputBuilder>().addComponents(messageUrlInput);
+		const row5 = new ActionRowBuilder<TextInputBuilder>().addComponents(interactionKeyInput);
 
-		modal.addComponents(row1, row2, row3, row4);
+		modal.addComponents(row1, row2, row3, row4, row5);
 
 		return await interaction.showModal(modal);
 
 	} catch (error) {
-		container.logger.error('Erreur lors de l\'ouverture de la modale:', error);
+		container.logger.error('Erreur when opening modal:', error);
 		if (!interaction.replied && !interaction.deferred) {
-			return interaction.reply({ content: "❌ Erreur lors de l'affichage de la modale.", flags: [MessageFlags.Ephemeral] });
+			throw new ServiceException({
+				identifier: 'updateRawBroadcastModal',
+				message: '❌ Error when displaying modal.',
+				context: { interaction, command: this }
+			});
 		}
-		return interaction.editReply({ content: "❌ Erreur lors de l'affichage de la modale." });
+		throw new ServiceException({
+				identifier: 'updateRawBroadcastModal',
+				message: '❌ Error when displaying modal.',
+				context: { interaction, command: this }
+			});
 	}
 
 };
 
-// BROADCAST UPDATE RAW
+/**
+ * Update bot's target message with updated modal content 
+ * @param interaction 
+ * @returns Message<boolean>
+ */
 export const updateRawBroadcast = async (interaction: ModalSubmitInteraction) => {
 	try {
+		// Get interaction key to find the original button interaction
+		const interactionKey = interaction.fields.getTextInputValue('interactionKeyField');
+		const buttonInteraction = interactionKey ? pendingButtonInteractions.get(interactionKey) : null;
+
+		// If we have the button interaction, defer its update first
+		if (buttonInteraction && !buttonInteraction.replied && !buttonInteraction.deferred) {
+			await buttonInteraction.deferUpdate();
+		}
+
+		// Also defer the modal reply for feedback
 		await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
 		// Extract message URL from the hidden field
@@ -214,7 +288,11 @@ export const updateRawBroadcast = async (interaction: ModalSubmitInteraction) =>
 		const match = messageUrl.match(urlRegex);
 
 		if (!match) {
-			return interaction.editReply({ content: '❌ URL du message invalide.' });
+			throw new UserError({
+				identifier: 'updateRawBroadcast',
+				message: '❌ Invalid message URL.',
+				context: { interaction, command: this }
+			});
 		}
 
 		const [_, _guildId, channelId, messageId] = match;
@@ -222,18 +300,30 @@ export const updateRawBroadcast = async (interaction: ModalSubmitInteraction) =>
 		// Fetch the channel
 		const channel = await interaction.client.channels.fetch(channelId);
 		if (!channel || !channel.isTextBased()) {
-			return interaction.editReply({ content: '❌ Channel introuvable ou inaccessible.' });
+			throw new UserError({
+				identifier: 'updateRawBroadcast',
+				message: '❌ Channel not found or inaccessible.',
+				context: { interaction, command: this }
+			});
 		}
 
 		// Fetch the message to update
 		const messageToUpdate = await channel.messages.fetch(messageId);
 		if (!messageToUpdate) {
-			return interaction.editReply({ content: '❌ Message introuvable.' });
+			throw new UserError({
+				identifier: 'updateRawBroadcast',
+				message: '❌ Message not found.',
+				context: { interaction, command: this }
+			});
 		}
 
 		// Check if message is editable by the bot
 		if (messageToUpdate.author.id !== interaction.client.user?.id) {
-			return interaction.editReply({ content: '❌ Le bot ne peut modifier que ses propres messages.' });
+			throw new UserError({
+				identifier: 'updateRawBroadcast',
+				message: '❌ Bot can only mofified it\'s own messages.',
+				context: { interaction, command: this }
+			});
 		}
 
 		// Get fields from modal
@@ -246,14 +336,20 @@ export const updateRawBroadcast = async (interaction: ModalSubmitInteraction) =>
 		try {
 			parsedMessage = parseRawMessage(contentField, embedsField, attachmentsField);
 		} catch (error) {
-			return interaction.editReply({ 
-				content: `❌ Erreur de parsing: ${error instanceof Error ? error.message : 'Format invalide'}` 
+			throw new UserError({
+				identifier: 'updateRawBroadcast',
+				message: `❌ Parsing error: ${error instanceof Error ? error.message : 'Invalid format'}`,
+				context: { interaction, command: this }
 			});
 		}
 
 		// Validate at least one field is present
 		if (!parsedMessage.content && parsedMessage.embeds.length === 0 && parsedMessage.attachments.length === 0) {
-			return interaction.editReply({ content: '❌ Le message doit contenir au moins du contenu, un embed ou un attachement.' });
+			throw new UserError({
+				identifier: 'updateRawBroadcast',
+				message: '❌ Message must contain at least content, embed or attachement.',
+				context: { interaction, command: this }
+			});
 		}
 
 		// Update the message
@@ -263,28 +359,62 @@ export const updateRawBroadcast = async (interaction: ModalSubmitInteraction) =>
 			files: parsedMessage.attachments
 		});
 
-		return interaction.editReply({ 
-			content: `✅ Message mis à jour avec succès!\n**Lien:** ${messageUrl}` 
-		});
+		// Update the original component V2 with success message
+		if (buttonInteraction) {
+			try {
+				await buttonInteraction.editReply({ 
+					components: [buildSuccessContainer(messageUrl)]
+				});
+				
+				// Clean up the stored interaction
+				if (interactionKey) {
+					pendingButtonInteractions.delete(interactionKey);
+				}
 
+				// Delete the ephemeral modal response since success is shown in component
+				return interaction.deleteReply();
+
+			} catch (error) {
+				throw new ServiceException({
+					identifier: 'updateRawBroadcast',
+					message: '❌ Error when updating component.',
+					context: { interaction, command: this }
+				});
+			}
+		}
+
+		// If no button interaction (shouldn't happen), send confirmation
+		return interaction.editReply({ 
+			content: `✅ Update message successfully !\n\n**Link:** ${messageUrl}` 
+		});
+		
 	} catch (error) {
-		container.logger.error('Erreur lors de l\'update du message:', error);
+		container.logger.error('Error when updating message :', error);
 		
 		if (!interaction.replied && !interaction.deferred) {
-			return interaction.reply({ 
-				content: '❌ Erreur lors de la mise à jour du message.', 
-				flags: [MessageFlags.Ephemeral] 
+			throw new ServiceException({
+				identifier: 'updateRawBroadcast',
+				message: '❌ Error when updating message.',
+				context: { interaction, command: this }
 			});
 		}
 		
-		return interaction.editReply({ content: '❌ Erreur lors de la mise à jour du message.' });
+		throw new ServiceException({
+			identifier: 'updateRawBroadcast',
+			message: '❌ Error when updating message.',
+			context: { interaction, command: this }
+		});
 	}
 };
 
-// BROADCAST GET RAW
+/**
+ * Get raw version of a target message
+ * @param interaction 
+ * @returns Component V2
+ */
 export const getRawBroadcast = async (interaction: BroadcastInteraction) => {
 
-	const message = await verifyMessage(interaction, true, true);
+	const message = await verifyMessage(interaction, true, true, 'getRawBroadcast');
 
 	// Build copyable raw representation (Markdown for embeds, easy to copy/paste)
 	const rawContent = buildCopyableRawMessage(message);
@@ -299,7 +429,7 @@ export const getRawBroadcast = async (interaction: BroadcastInteraction) => {
 				.setId(BroadcastVariables.LinkTextDisplayOptionId)
 		)
 		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
-		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# RAW Message (Copyable) :'))
+		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# RAW Message :'))
 		.addTextDisplayComponents(
 			new TextDisplayBuilder()
 				.setContent(`\`\`\`\n${protectBackticks(rawContent)}\n\`\`\``)
@@ -313,6 +443,10 @@ export const getRawBroadcast = async (interaction: BroadcastInteraction) => {
 	return interaction.editReply({ components: [broadcastContainer] });
 }
 
+/**
+ * Build error messge with component V2 format
+ * @returns Component V2
+ */
 export const buildErrorModalMessage = () => {
 	return new ContainerBuilder()
 		.setAccentColor(15844367)
@@ -320,7 +454,24 @@ export const buildErrorModalMessage = () => {
 		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# Error :'))
 		.addTextDisplayComponents(
 			new TextDisplayBuilder()
-				.setContent(`❌ Le bot ne peut modifier que ses propres messages.`)
+				.setContent(`❌ Bot can only modified it's own messages`)
 				.setId(BroadcastVariables.LinkErrorTextDisplayOptionId)
 		)
 }
+
+/**
+ * Build success container after message update
+ * @param messageUrl - URL of the updated message
+ * @returns Component V2
+ */
+export const buildSuccessContainer = (messageUrl: string) => {
+	return new ContainerBuilder()
+		.setAccentColor(5763719) // Green color
+		.setId(BroadcastVariables.ContainerId)
+		.addTextDisplayComponents(new TextDisplayBuilder().setContent('# ✅ Success'))
+		.addTextDisplayComponents(
+			new TextDisplayBuilder()
+				.setContent(`Update message successfully !\n\n**Link:** ${messageUrl}`)
+				.setId(BroadcastVariables.LinkTextDisplayOptionId)
+		);
+};
