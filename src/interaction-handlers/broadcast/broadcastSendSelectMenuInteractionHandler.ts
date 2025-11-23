@@ -4,7 +4,7 @@ import { type ChannelSelectMenuInteraction } from 'discord.js';
 import { BroadcastVariables, sendBroadcast } from '../../Services/broadcast.service';
 
 @ApplyOptions<InteractionHandler.Options>({
-	name: 'broadcastSendChannelSelect',
+	name: BroadcastVariables.ChannelSelectCustomId.toString(),
 	enabled: true,
 	interactionHandlerType: InteractionHandlerTypes.SelectMenu
 })

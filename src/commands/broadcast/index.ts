@@ -2,7 +2,7 @@ import { ApplyOptions } from '@sapphire/decorators';
 import { Command } from '@sapphire/framework';
 import { Subcommand } from '@sapphire/plugin-subcommands';
 import { ApplicationCommandType, ApplicationIntegrationType, ContextMenuCommandInteraction, InteractionContextType, MessageFlags } from 'discord.js';
-import { broadcastContainerBuilder, sendBroadcast, sendSelectChannelTypes } from '../../Services/broadcast.service';
+import { broadcastContainerBuilder, getRawBroadcast, sendBroadcast, sendSelectChannelTypes, updateRawBroadcastModal } from '../../Services/broadcast.service';
 import '../../utils/helper/channelHelper';
 import '../../utils/helper/stringHelper';
 
@@ -18,16 +18,12 @@ import '../../utils/helper/stringHelper';
 			chatInputRun: sendBroadcast
 		},
 		{
-			name: 'get'
-			// chatInputRun: async (interaction: Command.ChatInputCommandInteraction) => {
-			// 	return await broadcast(interaction);
-			// }
+			name: 'getraw',
+			chatInputRun: getRawBroadcast
 		},
 		{
-			name: 'update'
-			// chatInputRun: async (interaction: Command.ChatInputCommandInteraction) => {
-			// 	return await broadcast(interaction);
-			// }
+			name: 'updateraw',
+			chatInputRun: updateRawBroadcastModal
 		}
 	]
 })
@@ -57,6 +53,23 @@ export class BroadcastCommand extends Subcommand {
 								.setDescription('Channel to broadcast the message to')
 								.setRequired(true)
 								.addChannelTypes(sendSelectChannelTypes)
+						)
+				)
+				.addSubcommand((subcommand) =>
+					subcommand
+						.setName('getraw')
+						.setDescription('Get a target message and send raw content to dump channel')
+						.addStringOption((option) => option.setName('link').setDescription('Message\'s link to retrieve').setRequired(true))
+				)
+				.addSubcommand((subcommand) =>
+					subcommand
+						.setName('updateraw')
+						.setDescription('Update a message using raw data from dump channel')
+						.addStringOption((option) => 
+							option
+								.setName('original_link')
+								.setDescription('Link to the original message to update')
+								.setRequired(true)
 						)
 				)
 		);

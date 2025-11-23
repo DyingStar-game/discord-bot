@@ -26,26 +26,22 @@ export const sendLongMessageAsync = async (
 	{ content, embeds, files }: MessageCreateOptions
 ) => {
 	const contentChunks = content ? splitIntoChunks(content) : [];
-
 	if (contentChunks.length > 0) {
 		for (let i = 0; i < contentChunks.length - 1; i++) {
 			await channel.send({
 				content: contentChunks[i]
 			});
 		}
-
-		await channel.send({
+		return await channel.send({
 			content: contentChunks[contentChunks.length - 1],
 			embeds,
 			files
 		});
-		return true;
 	} else {
-		await channel.send({
+		return await channel.send({
 			embeds,
 			files
 		});
-		return true;
 	}
 };
 
