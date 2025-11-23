@@ -1,7 +1,21 @@
-import { ButtonInteraction, ChannelSelectMenuInteraction, ChatInputCommandInteraction, ComponentType, GuildMember, InteractionEditReplyOptions, InteractionUpdateOptions, Message, MessageFlags, TextDisplayBuilder, EmbedBuilder, APIEmbed } from 'discord.js';
+import {
+	ButtonInteraction,
+	ChannelSelectMenuInteraction,
+	ChatInputCommandInteraction,
+	ComponentType,
+	GuildMember,
+	InteractionEditReplyOptions,
+	InteractionUpdateOptions,
+	Message,
+	MessageFlags,
+	TextDisplayBuilder,
+	EmbedBuilder,
+	APIEmbed
+} from 'discord.js';
 import { BroadcastInteraction, BroadcastVariables } from '../../Services/broadcast.service';
 import { ServiceException } from '../../lib/Error/class/serviceException';
 import { UserError } from '@sapphire/framework';
+import { parseDiscordMessage } from './stringHelper';
 
 /**
  * Check if a message is a bot message
@@ -51,7 +65,6 @@ export const verifyMessage = async (interaction: BroadcastInteraction, allowBot:
 			context: { interaction, command: this }
 		});
 
-
 	let link = interaction instanceof ChatInputCommandInteraction ? interaction.options.getString('link', true) : '';
 
 	if (interaction instanceof ChannelSelectMenuInteraction || interaction instanceof ButtonInteraction) {
@@ -72,22 +85,11 @@ export const verifyMessage = async (interaction: BroadcastInteraction, allowBot:
 		link = textDisplayComponent.content;
 	}
 
-	// Parse Discord link: https://discord.com/channels/{guildId}/{channelId}/{messageId}
-	const urlRegex = /^https?:\/\/(?:ptb\.|canary\.)?discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
-	const match = link.match(urlRegex);
-
-	if (!match)
-		throw new UserError({
-			identifier: method,
-			message: 'Lien invalide. Format attendu: https://discord.com/channels/{guildId}/{channelId}/{messageId}',
-			context: { interaction, command: this }
-		});
-
-	const [_, _guildId, channelId, messageId] = match;
+	const { channelId, messageId } = parseDiscordMessage(link);
 
 	// Fetch source channel
 	const channel = await interaction.client.channels.fetch(channelId);
-	if (!channel || !channel.isTextBased()) {
+	if (!channel?.isTextBased()) {
 		throw new UserError({
 			identifier: method,
 			message: 'Channel not found or inaccessible',
@@ -119,9 +121,9 @@ export const verifyMessage = async (interaction: BroadcastInteraction, allowBot:
 			context: { interaction, command: this }
 		});
 	}
-	
+
 	return message;
-}
+};
 
 /**
  * Convert an embed to Markdown format (copyable)
@@ -130,7 +132,7 @@ export const verifyMessage = async (interaction: BroadcastInteraction, allowBot:
  */
 export const embedToMarkdown = (embed: APIEmbed): string => {
 	const parts: string[] = [];
-	
+
 	// Author
 	if (embed.author) {
 		parts.push(`**${embed.author.name}**`);
@@ -138,7 +140,7 @@ export const embedToMarkdown = (embed: APIEmbed): string => {
 			parts[parts.length - 1] = `[${embed.author.name}](${embed.author.url})`;
 		}
 	}
-	
+
 	// Title
 	if (embed.title) {
 		let title = `## ${embed.title}`;
@@ -147,12 +149,12 @@ export const embedToMarkdown = (embed: APIEmbed): string => {
 		}
 		parts.push(title);
 	}
-	
+
 	// Description
 	if (embed.description) {
 		parts.push(embed.description);
 	}
-	
+
 	// Fields
 	if (embed.fields && embed.fields.length > 0) {
 		for (const field of embed.fields) {
@@ -160,28 +162,28 @@ export const embedToMarkdown = (embed: APIEmbed): string => {
 			parts.push(field.value);
 		}
 	}
-	
+
 	// Image
 	if (embed.image?.url) {
 		parts.push(`![Image](${embed.image.url})`);
 	}
-	
+
 	// Thumbnail
 	if (embed.thumbnail?.url) {
 		parts.push(`![Thumbnail](${embed.thumbnail.url})`);
 	}
-	
+
 	// Footer
 	if (embed.footer) {
 		parts.push(`*${embed.footer.text}*`);
 	}
-	
+
 	// Timestamp
 	if (embed.timestamp) {
 		const date = new Date(embed.timestamp);
 		parts.push(`*${date.toLocaleString()}*`);
 	}
-	
+
 	return parts.join('\n');
 };
 
@@ -192,9 +194,9 @@ export const embedToMarkdown = (embed: APIEmbed): string => {
  */
 export const serializeEmbeds = (message: Message): string => {
 	if (message.embeds.length === 0) return '';
-	
+
 	try {
-		const embedsData = message.embeds.map(embed => embed.toJSON());
+		const embedsData = message.embeds.map((embed) => embed.toJSON());
 		return JSON.stringify(embedsData, null, 2);
 	} catch (error) {
 		console.error('Error serializing embeds:', error);
@@ -209,8 +211,8 @@ export const serializeEmbeds = (message: Message): string => {
  */
 export const serializeAttachments = (message: Message): string => {
 	if (message.attachments.size === 0) return '';
-	
-	return message.attachments.map(att => att.url).join('\n');
+
+	return message.attachments.map((att) => att.url).join('\n');
 };
 
 /**
@@ -221,13 +223,13 @@ export const serializeAttachments = (message: Message): string => {
  */
 export const buildCopyableRawMessage = (message: Message): string => {
 	const sections: string[] = [];
-	
+
 	// Content section
 	if (message.content) {
 		sections.push(message.content);
 		sections.push('');
 	}
-	
+
 	// Embeds section (converted to Markdown)
 	if (message.embeds.length > 0) {
 		message.embeds.forEach((embed, index) => {
@@ -238,16 +240,16 @@ export const buildCopyableRawMessage = (message: Message): string => {
 			sections.push('');
 		});
 	}
-	
+
 	// Attachments section
 	if (message.attachments.size > 0) {
 		sections.push('--- Attachments ---');
-		message.attachments.forEach(att => {
+		message.attachments.forEach((att) => {
 			sections.push(att.url);
 		});
 		sections.push('');
 	}
-	
+
 	return sections.join('\n').trim();
 };
 
@@ -257,7 +259,9 @@ export const buildCopyableRawMessage = (message: Message): string => {
  * @param message - The Discord message
  * @returns Object with separate content, embeds JSON, and attachments
  */
-export const buildEditableRawMessage = (message: Message): {
+export const buildEditableRawMessage = (
+	message: Message
+): {
 	content: string;
 	embedsJson: string;
 	attachments: string;
@@ -277,8 +281,8 @@ export const buildEditableRawMessage = (message: Message): {
  * @returns Parsed message with content, embeds, and attachments
  */
 export const parseRawMessage = (
-	contentField: string, 
-	embedsField: string, 
+	contentField: string,
+	embedsField: string,
 	attachmentsField: string
 ): {
 	content: string;
@@ -293,10 +297,10 @@ export const parseRawMessage = (
 	if (embedsField.trim()) {
 		try {
 			const embedsData = JSON.parse(embedsField.trim());
-			
+
 			// Handle both array and single object
 			const embedsArray = Array.isArray(embedsData) ? embedsData : [embedsData];
-			
+
 			for (const embedData of embedsArray) {
 				try {
 					embeds.push(new EmbedBuilder(embedData));
@@ -314,9 +318,9 @@ export const parseRawMessage = (
 	if (attachmentsField.trim()) {
 		const urls = attachmentsField
 			.split('\n')
-			.map(line => line.trim())
-			.filter(line => line.length > 0 && (line.startsWith('http://') || line.startsWith('https://')));
-		
+			.map((line) => line.trim())
+			.filter((line) => line.length > 0 && (line.startsWith('http://') || line.startsWith('https://')));
+
 		attachments.push(...urls);
 	}
 

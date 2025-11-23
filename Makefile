@@ -95,6 +95,17 @@ status: ## Show status of all services
 	@echo "$(CYAN)📊 Service Status:$(RESET)"
 	@$(COMPOSE) ps
 
+.PHONY: clean
+clean: ## Remove .cache and dist folders (WARNING: This will delete all compiled files!)
+	@echo "$(RED)⚠️  This will delete .cache and dist folders !$(RESET)"
+	@read -p "Are you sure? (y/N) " answer; \
+	if [ "$$answer" = "y" ] || [ "$$answer" = "Y" ]; then \
+		sudo rm -rf .cache dist; \
+		echo "$(GREEN)✅ Folders cleaned$(RESET)"; \
+	else \
+		echo "$(YELLOW)Cancelled$(RESET)"; \
+	fi
+
 .PHONY: clean-volumes
 clean-volumes: ## Remove all volumes (WARNING: This will delete all data!)
 	@echo "$(RED)⚠️  This will delete all Docker volumes and data!$(RESET)"
@@ -115,13 +126,13 @@ help: ## Show this help message
 	@echo "$(CYAN)DyingStar Discord Bot - Available Commands:$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)CP/PO/Others Profile (Simple Testing):$(RESET)"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(CYAN)%-15s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST) | grep -E "(start|stop)"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / && ($$1 == "start" || $$1 == "stop") {printf "  $(CYAN)%-15s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(YELLOW)Dev Profile (Development):$(RESET)"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(CYAN)%-15s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST) | grep -E "(up|down|pnpm)"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / && ($$1 == "up" || $$1 == "down" || $$1 == "pnpm" || $$1 == "dev") {printf "  $(CYAN)%-15s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(YELLOW)Utilities:$(RESET)"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(CYAN)%-15s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST) | grep -E "(logs|shell|status|clean-volumes)"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / && ($$1 == "logs" || $$1 == "shell" || $$1 == "status" || $$1 == "clean" || $$1 == "clean-volumes") {printf "  $(CYAN)%-15s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(YELLOW)Examples:$(RESET)"
 	@echo "  $(CYAN)make start$(RESET)           # Start app for testing (CP/PO/Others)"

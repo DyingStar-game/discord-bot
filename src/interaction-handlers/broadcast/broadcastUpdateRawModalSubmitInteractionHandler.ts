@@ -4,7 +4,7 @@ import { ModalSubmitInteraction } from 'discord.js';
 import { BroadcastVariables, updateRawBroadcast } from '../../Services/broadcast.service';
 
 @ApplyOptions<InteractionHandler.Options>({
-	name: 'broadcastUpdateRawModal',
+	name: BroadcastVariables.ModalUpdateRawId.toString(),
 	enabled: true,
 	interactionHandlerType: InteractionHandlerTypes.ModalSubmit
 })
@@ -14,7 +14,7 @@ export class BroadcastUpdateRawModalInteractionHandler extends InteractionHandle
 		if (!interaction.customId.startsWith(BroadcastVariables.ModalUpdateRawId)) return this.none();
 		return this.some();
 	}
-	
+
 	public override async run(interaction: ModalSubmitInteraction) {
 		return await updateRawBroadcast(interaction);
 	}
