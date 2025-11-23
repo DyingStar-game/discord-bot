@@ -1,38 +1,42 @@
 # Node.js version (should match .nvmrc)
-x-node-image: &node-image 'node:22.20.0'
+x-node-image: &node-image "node:24.11.1"
 
 services:
   # App service for production/testing (CP/PO/Others profile)
-  # app:
-  #   image: *node-image
-  #   command: >
-  #     sh -c "
-  #       corepack enable &&
-  #       corepack install &&
-  #       pnpm install &&
-  #       pnpm dev
-  #     "
-  #   ports:
-  #     - '3000:3000'
-  #   volumes:
-  #     - ..:/app
-  #     - app_cache:/app/.cache
-  #   working_dir: /app
-  #   networks:
-  #     - backend
+  app:
+    image: *node-image
+    command: >
+      sh -c "
+        corepack enable &&
+        corepack install &&
+        pnpm install &&
+        pnpm dev
+      "
+    ports:
+      - "${BOT_PORT:-3000}:3000"
+    volumes:
+      - ..:/app
+      - app_cache:/app/.cache
+    working_dir: /app
+    networks:
+      - backend
 
   # Dev service for development work (lighter, no app by default)
   dev:
     image: *node-image
     command: tail -f /dev/null # Keep container running for exec commands
     ports:
-      - '3000:3000'
+      - "${BOT_PORT:-3000}:3000"
     volumes:
       - ..:/app
       - app_cache:/app/.cache
     working_dir: /app
     tty: true
     stdin_open: true
+    env_file:
+      - ../src/.env
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
     networks:
       - backend
 

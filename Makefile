@@ -1,5 +1,5 @@
 # =============================================================================
-# DyingStar Website - Makefile
+# DyingStar Discord Bot - Makefile
 # =============================================================================
 
 # Colors for output
@@ -17,20 +17,25 @@ $(info ❗❗ Using podman for compose commands❗❗)
 EXECUTOR := podman compose
 endif
 
-COMPOSE := $(EXECUTOR) -f docker/docker-compose.yml
+# Get absolute path to project root
+ROOT_DIR := $(shell pwd)
+COMPOSE := $(EXECUTOR) -f $(ROOT_DIR)/docker/docker-compose.yml --env-file $(ROOT_DIR)/src/.env.local
 
 DEV_SERVICE := dev
 APP_SERVICE := app
 
-# =============================================================================
-# CP/PO/Others Profile - Simple site testing
-# =============================================================================
 
-.PHONY: start
-start: ## Start the complete application (install, build, start) for testing
-	@echo "$(CYAN)🚀 Starting DyingStar Discord Bot for testing...$(RESET)"
-	@echo "$(YELLOW)This will install dependencies, build, and start the application$(RESET)"
-	@$(COMPOSE) up $(APP_SERVICE) --build
+# =============================================================================
+# Check .env file exists
+# =============================================================================
+.PHONY: check-env
+check-env:
+	@if [ ! -f src/.env.local ]; then \
+		echo "$(RED)❌ .env.local file not found!$(RESET)"; \
+		echo "$(YELLOW)💡 Copy src/.env.local.sample to src/.env.local and configure it:$(RESET)"; \
+		echo "   cp src/.env.local.sample src/.env.local"; \
+		exit 1; \
+	fi
 
 .PHONY: stop
 stop: ## Stop all running services
@@ -125,20 +130,12 @@ clean-volumes: ## Remove all volumes (WARNING: This will delete all data!)
 help: ## Show this help message
 	@echo "$(CYAN)DyingStar Discord Bot - Available Commands:$(RESET)"
 	@echo ""
-	@echo "$(YELLOW)CP/PO/Others Profile (Simple Testing):$(RESET)"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / && ($$1 == "start" || $$1 == "stop") {printf "  $(CYAN)%-15s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
-	@echo ""
 	@echo "$(YELLOW)Dev Profile (Development):$(RESET)"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / && ($$1 == "up" || $$1 == "down" || $$1 == "pnpm" || $$1 == "dev") {printf "  $(CYAN)%-15s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "$(YELLOW)Utilities:$(RESET)"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / && ($$1 == "logs" || $$1 == "shell" || $$1 == "status" || $$1 == "clean" || $$1 == "clean-volumes") {printf "  $(CYAN)%-15s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
-	@echo "$(YELLOW)Examples:$(RESET)"
-	@echo "  $(CYAN)make start$(RESET)           # Start app for testing (CP/PO/Others)"
-	@echo "  $(CYAN)make up$(RESET)             # Start dev environment (Dev)"
-	@echo "  $(CYAN)make pnpm build$(RESET)     # Build the application"
-	@echo "  $(CYAN)make install$(RESET)        # Install dependencies"
 
 # Default target
 .DEFAULT_GOAL := help
