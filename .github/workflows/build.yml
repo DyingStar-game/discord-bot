@@ -24,7 +24,6 @@ jobs:
       image: node:24-alpine
       options: >-
         --cpus=2
-        --network=host
     permissions:
       contents: read
       id-token: write
@@ -214,7 +213,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHTOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # Build local (pas de push, cache GHA Si possible)
       - name: Build (no push)
