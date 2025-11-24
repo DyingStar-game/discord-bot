@@ -31,3 +31,7 @@ package-lock.json
 .env.test.local
 .env.production.local
 .pnpm-store/
+
+artifact/
+
+.env.act

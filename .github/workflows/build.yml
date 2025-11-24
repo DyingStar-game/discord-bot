@@ -24,6 +24,7 @@ jobs:
       image: node:24-alpine
       options: >-
         --cpus=2
+        --network=host
     permissions:
       contents: read
       id-token: write
@@ -36,7 +37,6 @@ jobs:
         run: |
           apk update && apk add --no-cache tar jq libc6-compat python3 build-base g++ make
           tar --version || true
-
       - name: Enable Corepack & activate pinned pnpm
         id: pnpm-version
         run: |
@@ -49,30 +49,12 @@ jobs:
           pnpm --version
           echo "pnpm_version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Setup Node (with pnpm cache)
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
-
-      # - name: Restore Discord Bot build cache
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: node_modules
-      #     key: node-modules-cache-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-      #     restore-keys: |
-      #       node-modules-cache-${{ runner.os }}-
-
       - name: Install dependencies (pnpm install)
         env:
           PNPM_HOME: ~/.local/share/pnpm
         run: |
           pnpm fetch --silent
           pnpm --reporter=append-only install --frozen-lockfile --prefer-offline
-
-      # - name: Allow build scripts (non-interactive)
-      #   run: pnpm config set allow-scripts "@sapphire/type"
 
       - name: Recreate .env from secret
         run: |
@@ -81,10 +63,6 @@ jobs:
           # This env file is needed for the build process
           printf '%s\n' "${{ secrets.SANDBOT_ENV_FILE }}" > src/.env
           sed -i 's/\r$//' src/.env
-
-      # - name: Lint
-      #   run: |
-      #     pnpm --reporter=append-only lint:ci
 
       - name: Build (Discord Bot)
         run: pnpm --reporter=append-only build
@@ -101,7 +79,18 @@ jobs:
             package.json \
             pnpm-lock.yaml
 
+      # 👉 spécial pour act : on simule un "artifact" local
+      - name: Prepare runtime artifact for act
+        if: ${{ env.ACT }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          cp runtime.tar.gz artifact/runtime.tar.gz
+          ls -al artifact
+
+      # 👉 GitHub réel uniquement
       - name: Upload runtime artifact (tarball)
+        if: ${{ !env.ACT }}
         uses: actions/upload-artifact@v4
         with:
           name: sandbot-runtime
@@ -126,10 +115,25 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download runtime artifact
+        if: ${{ !env.ACT }}
         uses: actions/download-artifact@v4
         with:
           name: sandbot-runtime
           path: artifact
+
+      # 👉 en local, on utilise ce que le job build a posé
+      - name: Use local artifact (act)
+        if: ${{ env.ACT }}
+        run: |
+          set -euo pipefail
+          echo "Running under act, using local artifact"
+          ls -al
+          ls -al artifact || echo "artifact dir missing"
+
+      - name: Extract runtime artifact (restore symlinks)
+        run: |
+          set -euo pipefail
+          tar -xzf artifact/runtime.tar.gz
 
       - name: Extract runtime artifact (restore symlinks)
         run: |
@@ -218,7 +222,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile.prod
+          file: docker/Dockerfile
           platforms: ${{ steps.meta.outputs.platforms }}
           push: false
           provenance: false

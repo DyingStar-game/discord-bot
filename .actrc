@@ -1,0 +1,5 @@
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+--action-offline-mode
+--container-architecture=linux/amd64
+--bind
+--env-file .act/.env.act
