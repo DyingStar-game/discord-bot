@@ -1,37 +1,25 @@
+x-common: &common
+  restart: unless-stopped
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  tty: true
+  networks:
+    - backend
+
+name: Dyingstar-staging
 services:
-  app:
-    container_name: dyingstar-webapp-staging
-    image: ${IMAGE}
-    restart: unless-stopped
+  webapp:
+    <<: *common
+    image: ghcr.io/dyingstar-game/discord-bot:staging
+    pull_policy: always
     ports:
-      - "8101:3000"
+      - '8202:3000'
     env_file:
-      - /opt/website/envs/staging.env
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
-      interval: 15s
-      timeout: 3s
-      retries: 5
-    tty: true
-    networks:
-      - backend
-
-  meilisearch:
-    container_name: meilisearch-staging
-    image: getmeili/meilisearch:v1.22
-    ports:
-      - "7701:7700"
-    environment:
-      MEILI_MASTER_KEY: "xxxx"
-      MEILI_ENV: "production"
-    volumes:
-      - meili_data:/meili_data
-    networks:
-      - backend
-
-volumes:
-  meili_data:
-
+      - ./envs/staging.env
+    read_only: true
+    tmpfs:
+      - /tmp
 networks:
   backend:
     driver: bridge

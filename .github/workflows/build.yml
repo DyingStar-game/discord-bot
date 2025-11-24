@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: sandbot
+  IMAGE_NAME: discord-bot
   REGISTRY: ghcr.io/dyingstar-game
 
 jobs:
@@ -265,9 +265,9 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ needs.docker-image.outputs.target }}" == "prod" ]]; then
-            echo "compose=${{ secrets.COMPOSE_FILE_PROD }}" >> $GITHUB_OUTPUT
+            echo "compose=prod.compose.yml" >> $GITHUB_OUTPUT
           else
-            echo "compose=${{ secrets.COMPOSE_FILE_STAGING }}" >> $GITHUB_OUTPUT
+            echo "compose=staging.compose.yml" >> $GITHUB_OUTPUT
           fi
 
       - name: SSH deploy
@@ -282,7 +282,7 @@ jobs:
             set -euo pipefail
             # PAT read:packages + username du compte du PAT
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-            cd docker
+            cd discordBot
             echo "Using compose: ${{ steps.choose.outputs.compose }}"
             docker compose -f ${{ steps.choose.outputs.compose }} pull --ignore-pull-failures
             docker compose -f ${{ steps.choose.outputs.compose }} up -d --no-deps
